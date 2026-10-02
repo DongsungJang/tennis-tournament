@@ -122,7 +122,7 @@ table.plain td.l{text-align:left}
 .g-grp{display:flex;gap:6px;align-items:flex-start;margin:4px 2px}
 .g-grp .g-lbl{flex:none;font-weight:700;min-width:58px}
 .g-grp .g-list{display:flex;flex-wrap:wrap;gap:3px}
-.g-grp .g-chip{background:var(--pbg);color:var(--pfg);border-radius:5px;padding:0 6px;font-weight:700;font-size:12.5px;line-height:1.6}
+.g-grp .g-chip{background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:0 6px;font-weight:700;font-size:12.5px;line-height:1.6}
 .g-note{margin:8px 2px 0;background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line);border-radius:9px;padding:6px 10px;font-size:12.5px}
 .g-warn{font-size:11.5px;color:var(--muted);margin:6px 2px 0}
 
@@ -671,6 +671,8 @@ function shortNames(names){
   }
 
   function tierText(){ return colors.tiers.map(function(t){ return t.name + ' ' + t.from + '~' + t.to + '번'; }).join(' · '); }
+  // 경기 수 명단은 순위(실력대)가 드러나지 않게 색 없이 가나다순으로
+  function byName(ids, sh){ return ids.slice().sort(function(a, b){ return sh[a].localeCompare(sh[b], 'ko'); }); }
   function renderSummary(nm, sh){
     var st = result.st, h = '';
     h += '<div class="g-wrap"><div class="g-head"><b>테니스 복식 대진표</b><span>' + state.n + '명 · ' + SES + '세션 · ' + TIMES[0] + '–' + ENDS[SES - 1] + '</span></div>';
@@ -683,7 +685,7 @@ function shortNames(names){
       h += '<tr class="g-tr"><td class="g-t">' + TIMES[s] + '</td>';
       h += cell(p[0]) + cell(p[1]) + '<td class="g-v">vs</td>' + cell(p[2]) + cell(p[3]);
       h += cell(p[4], 'g-c2') + cell(p[5]) + '<td class="g-v">vs</td>' + cell(p[6]) + cell(p[7]) + '</tr>';
-      var rs = p.slice(8).sort(function(a, b){ return a - b; });
+      var rs = byName(p.slice(8), sh);
       h += '<tr class="g-rr"><td class="g-t"></td><td class="g-rb" colspan="10">휴식 ' + rs.map(function(id){ return '<span class="g-chip pc' + id + '">' + esc(sh[id]) + '</span>'; }).join('') + '</td></tr>';
     }
     h += '</tbody></table>';
@@ -692,7 +694,7 @@ function shortNames(names){
     if (gs.length === 1) {
       h += '<div class="g-grp"><span class="g-lbl">전원 ' + gs[0].games + '경기</span></div>';
     } else gs.forEach(function(g){
-      h += '<div class="g-grp"><span class="g-lbl">' + g.games + '경기 <small>(' + g.ids.length + '명)</small></span><span class="g-list">' + g.ids.map(function(id){ return '<span class="g-chip pc' + id + '">' + esc(sh[id]) + '</span>'; }).join('') + '</span></div>';
+      h += '<div class="g-grp"><span class="g-lbl">' + g.games + '경기 <small>(' + g.ids.length + '명)</small></span><span class="g-list">' + byName(g.ids, sh).map(function(id){ return '<span class="g-chip">' + esc(sh[id]) + '</span>'; }).join('') + '</span></div>';
     });
     if (gs.length > 1){
       var low = gs[gs.length - 1].games;
@@ -755,12 +757,12 @@ function shortNames(names){
     for (var s = 0; s < SES; s++){
       var p = st[s], t = function(a, b){ return sh[a] + '·' + sh[b]; };
       L.push(TIMES[s] + '  1코트 ' + t(p[0], p[1]) + ' vs ' + t(p[2], p[3]) + '  |  2코트 ' + t(p[4], p[5]) + ' vs ' + t(p[6], p[7]));
-      L.push('       휴식: ' + p.slice(8).sort(function(a, b){ return a - b; }).map(function(id){ return sh[id]; }).join(', '));
+      L.push('       휴식: ' + byName(p.slice(8), sh).map(function(id){ return sh[id]; }).join(', '));
     }
     L.push('');
     L.push('휴식 ' + restLabel() + '씩 · 3연속 ' + info.triplePlayers + '명');
     var gs = groups();
-    gs.forEach(function(g){ L.push(g.games + '경기: ' + g.ids.map(function(id){ return sh[id]; }).join(', ')); });
+    gs.forEach(function(g){ L.push(g.games + '경기: ' + byName(g.ids, sh).map(function(id){ return sh[id]; }).join(', ')); });
     if (gs.length > 1) L.push('※ ' + gs[gs.length - 1].games + '경기 하시는 분들은 경기 간격이 뜰 수 있으니 일찍 오셔서 몸을 충분히 풀어 주세요!');
     return L.join('\n');
   }
