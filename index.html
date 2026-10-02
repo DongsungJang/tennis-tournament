@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>테니스 복식 대진표</title>
+<style>
+:root{
+  --bg:#f4f5f7;--card:#ffffff;--ink:#1b1e23;--muted:#5f6670;--line:#dfe2e7;
+  --strong:#2b2f36;--accent:#2f6fde;--accent-ink:#ffffff;--soft:#eef1f5;
+  --warn-bg:#fff4dc;--warn-ink:#6e4300;--warn-line:#f0c96b;
+  --ok:#1d7a46;--bad:#b3261e;--rest-bg:#f0f2f5;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#111317;--card:#1a1d22;--ink:#e8eaed;--muted:#9aa1ab;--line:#2f343c;
+  --strong:#c9ced6;--accent:#7fb0ff;--accent-ink:#0d1420;--soft:#22262d;
+  --warn-bg:#352a10;--warn-ink:#ffd58a;--warn-line:#7a5d1c;
+  --ok:#6fd49a;--bad:#ff8a80;--rest-bg:#20242a;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;font-size:15px;line-height:1.45;overflow-x:hidden}
+button,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+
+/* ---------- 상단 sticky 바 ---------- */
+.topbar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:6px;padding:8px 16px;background:var(--bg);border-bottom:1px solid var(--line)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
+.seg button{border:0;background:transparent;padding:6px 13px;font-weight:600;font-size:14px;white-space:nowrap}
+@media (max-width:420px){.topbar{gap:4px}.seg button{padding:5px 10px;font-size:13.5px}.tb-btn{padding:5px 9px;font-size:13px}}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.tb-btn{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 11px;font-size:13.5px;white-space:nowrap}
+.tb-btn:hover{border-color:var(--accent)}
+.spacer{flex:1}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--strong);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}
+.toast.show{opacity:1}
+
+/* ---------- 레이아웃 ---------- */
+.layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;padding:16px;max-width:1280px;margin:0 auto}
+@media (max-width:880px){.layout{grid-template-columns:minmax(0,1fr)}
+  body.mode-summary #settings{display:none}}
+body.mode-summary .layout{padding-top:10px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+#settings h2{font-size:15px;margin:0 0 10px}
+.field{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.field select{padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.names{display:grid;grid-template-columns:28px 1fr;gap:5px 6px;align-items:center}
+.names label{font-size:12.5px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.names input{width:100%;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
+.names input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.hint{font-size:12.5px;color:var(--muted);margin:10px 0 0}
+.row-btns{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+
+.notice{background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line);border-radius:10px;padding:8px 11px;font-size:13.5px;margin:0 0 12px}
+.busy{opacity:.55;transition:opacity .15s}
+
+/* ---------- 상세 화면 ---------- */
+#detail h3{font-size:15px;margin:18px 0 8px}
+.quality{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px}
+.q{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 11px}
+.q .k{font-size:12px;color:var(--muted)}
+.q .v{font-size:19px;font-weight:700;font-variant-numeric:tabular-nums}
+.q .s{font-size:12px;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.card-h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.card-h b{font-size:16px}
+.card-h span{font-size:12px;color:var(--muted)}
+.court{border-top:1px solid var(--line);padding:7px 0}
+.court-h{display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px}
+.vs{display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center}
+.team{display:flex;flex-direction:column;gap:4px}
+.vs-mid{font-size:12px;color:var(--muted);font-weight:700}
+.p{display:flex;align-items:center;justify-content:space-between;gap:6px;background:var(--pbg);color:var(--pfg);border-radius:8px;padding:3px 8px;font-weight:600;font-size:14px}
+.p small{font-weight:600;opacity:.85;font-variant-numeric:tabular-nums;font-size:11px}
+.rest{border-top:1px dashed var(--line);padding-top:7px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:12px;color:var(--muted)}
+.chip{display:inline-block;background:var(--pbg);color:var(--pfg);border-radius:6px;padding:1px 6px;font-weight:600;font-size:12.5px}
+.tbl-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table.plain{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+table.plain th,table.plain td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:center;white-space:nowrap}
+table.plain th{font-size:12px;color:var(--muted);font-weight:600}
+table.plain td.l{text-align:left}
+.pat{letter-spacing:2px;font-size:12px}
+.bad{color:var(--bad);font-weight:700}
+.matrix td,.matrix th{padding:4px 5px;min-width:34px}
+.matrix td.self{background:var(--soft)}
+.matrix td.m2{background:var(--warn-bg);color:var(--warn-ink);font-weight:700}
+.legend{font-size:12px;color:var(--muted);margin:6px 2px 0}
+
+/* ---------- 요약 화면 (모든 클래스에 g- 접두사) ---------- */
+.g-wrap{max-width:640px;margin:0 auto}
+.g-head{display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 6px;font-size:13px;color:var(--muted)}
+.g-head b{color:var(--ink);font-size:15px}
+.g-table{width:100%;table-layout:fixed;border-collapse:collapse;font-size:clamp(10px,2.85vw,14px);background:var(--card);border:1px solid var(--line);border-radius:10px}
+.g-table tr{display:table-row}
+.g-table th,.g-table td{display:table-cell;padding:0;text-align:center;vertical-align:middle;overflow:hidden;white-space:nowrap}
+.g-table col.g-col-t{width:12%}
+.g-table col.g-col-n{width:9.75%}
+.g-table col.g-col-v{width:5%}
+.g-th{font-size:.9em;color:var(--muted);font-weight:700;padding:4px 0 !important;border-bottom:1px solid var(--line)}
+.g-t{font-weight:700;font-variant-numeric:tabular-nums;border-right:2.5px solid var(--strong)}
+.g-c2{border-left:2.5px solid var(--strong)}
+.g-n{padding:3px 1px !important}
+.g-n span{display:block;background:var(--pbg);color:var(--pfg);border-radius:5px;padding:3px 0;font-weight:700;letter-spacing:-.02em;text-overflow:clip;overflow:hidden}
+.g-n span.g-long{letter-spacing:-.09em;font-size:.92em}
+.g-v{font-size:.78em;color:var(--muted);font-weight:700}
+.g-rr td{border-bottom:1px solid var(--line)}
+.g-rr td.g-rb{background:var(--rest-bg);text-align:left;padding:2px 5px !important;font-size:.82em;color:var(--muted);white-space:normal;line-height:1.5}
+.g-rr td.g-t{background:var(--rest-bg)}
+.g-rb .g-chip{display:inline-block;background:var(--pbg);color:var(--pfg);border-radius:4px;padding:0 4px;margin:1px 2px 1px 0;font-weight:700}
+.g-foot{margin-top:8px;font-size:13px}
+.g-stat{color:var(--muted);margin:0 2px 6px}
+.g-stat b{color:var(--ink)}
+.g-grp{display:flex;gap:6px;align-items:flex-start;margin:4px 2px}
+.g-grp .g-lbl{flex:none;font-weight:700;min-width:58px}
+.g-grp .g-list{display:flex;flex-wrap:wrap;gap:3px}
+.g-grp .g-chip{background:var(--pbg);color:var(--pfg);border-radius:5px;padding:0 6px;font-weight:700;font-size:12.5px;line-height:1.6}
+.g-note{margin:8px 2px 0;background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line);border-radius:9px;padding:6px 10px;font-size:12.5px}
+.g-warn{font-size:11.5px;color:var(--muted);margin:6px 2px 0}
+
+.copy-dlg{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:60;padding:16px}
+.copy-dlg.open{display:flex}
+.copy-dlg .box{background:var(--card);border-radius:14px;padding:14px;width:min(560px,100%)}
+.copy-dlg textarea{width:100%;height:260px;font:12px/1.5 ui-monospace,Menlo,monospace;background:var(--soft);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
+[hidden]{display:none !important}
+</style>
+<style id="player-colors"></style>
+</head>
+<body>
+<div class="topbar">
+  <div class="seg" role="group" aria-label="보기 전환">
+    <button id="btn-detail" type="button" aria-pressed="false">상세</button>
+    <button id="btn-summary" type="button" aria-pressed="true">요약</button>
+  </div>
+  <span class="spacer"></span>
+  <button class="tb-btn" id="btn-reroll" type="button" title="시드를 바꿔 다시 편성">다른 조합으로</button>
+  <button class="tb-btn" id="btn-copy" type="button">복사</button>
+  <button class="tb-btn" id="btn-theme" type="button" title="테마">◐</button>
+</div>
+
+<div class="layout">
+  <aside id="settings" class="panel">
+    <h2>설정</h2>
+    <div class="field">
+      <label for="sel-n">인원</label>
+      <select id="sel-n"><option value="10">10명</option><option value="12">12명</option><option value="14">14명</option></select>
+    </div>
+    <div class="names" id="names"></div>
+    <p class="hint">실력 순서대로 입력하세요. 1번이 가장 잘 치는 사람이고, 순위 번호가 실력 점수로 쓰입니다. 입력하면 자동 저장되고 바로 다시 편성됩니다.</p>
+    <div class="row-btns">
+      <button class="tb-btn" id="btn-reset" type="button">예시 이름으로</button>
+    </div>
+  </aside>
+  <main id="main">
+    <section id="detail" hidden></section>
+    <section id="summary"></section>
+  </main>
+</div>
+
+<div class="copy-dlg" id="copy-dlg" role="dialog" aria-modal="true" aria-label="대진표 텍스트">
+  <div class="box">
+    <p style="margin:0 0 8px;font-size:14px">자동 복사가 막혀 있어요. 아래 텍스트를 길게 눌러 복사하세요.</p>
+    <textarea id="copy-ta" readonly></textarea>
+    <div class="row-btns" style="justify-content:flex-end"><button class="tb-btn" id="copy-close" type="button">닫기</button></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/*ENGINE-START*/
+var SES = 6, SLOT = 8;
+var TIMES = ['15:00','15:30','16:00','16:30','17:00','17:30'];
+var ENDS  = ['15:30','16:00','16:30','17:00','17:30','18:00'];
+// 가중치: 페어 밸런스·휴식 균등 최상 > 3연속 상 > 중복 만남 하 > 연속 휴식 소폭
+var W = { pair: 20, rest: 20, triple: 25, partner: 2, opp: 1, restRun: 0.5 };
+
+function rng32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; var t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// 상태: 세션마다 길이 N 순열. [0..7] = 코트1 A·B / C·D, 코트2 A·B / C·D, [8..] = 휴식
+// 출전 패턴(6비트 마스크)별 3연속·연속휴식 벌점은 미리 표로 계산
+var RUN_TBL = (function(){
+  var t = new Float64Array(64);
+  for (var m = 0; m < 64; m++){
+    var c = 0, run = 0, rr = 0;
+    for (var s = 0; s <= SES; s++){
+      var on = s < SES && (m >> s) & 1;
+      if (on){ run++; if (rr >= 2) c += W.restRun * (rr - 1); rr = 0; }
+      else { if (run >= 3) c += W.triple * (run - 2); run = 0; if (s < SES) rr++; else if (rr >= 2) c += W.restRun * (rr - 1); }
+    }
+    t[m] = c;
+  }
+  return t;
+})();
+function popc(m){ var c = 0; while (m){ c += m & 1; m >>= 1; } return c; }
+function makeCost(N){
+  var mask = new Int32Array(N), pc = new Uint8Array(N * N), oc = new Uint8Array(N * N);
+  var mean = SES * (N - SLOT) / N, restPen = new Float64Array(64);
+  for (var m = 0; m < 64; m++){ var dv = (SES - popc(m)) - mean; restPen[m] = W.rest * dv * dv + RUN_TBL[m]; }
+  function P(i, j){ return i < j ? i * N + j : j * N + i; }
+  return function(st){
+    var c = 0, s, k, i, x, key;
+    mask.fill(0); pc.fill(0); oc.fill(0);
+    for (s = 0; s < SES; s++){
+      var p = st[s], bit = 1 << s;
+      for (k = 0; k < 8; k += 4){
+        var a1 = p[k], a2 = p[k+1], b1 = p[k+2], b2 = p[k+3];
+        var d = (a1 + a2) - (b1 + b2);          // 순위 합 차 (0번=1위)
+        c += W.pair * d * d;
+        // 같은 편/상대 편 k회째 만남마다 (k-1)^2 증가분 = 2k-3 (k>=2)
+        x = ++pc[key = P(a1, a2)]; if (x > 1) c += W.partner * (2 * x - 3);
+        x = ++pc[key = P(b1, b2)]; if (x > 1) c += W.partner * (2 * x - 3);
+        x = ++oc[P(a1, b1)]; if (x > 1) c += W.opp * (2 * x - 3);
+        x = ++oc[P(a1, b2)]; if (x > 1) c += W.opp * (2 * x - 3);
+        x = ++oc[P(a2, b1)]; if (x > 1) c += W.opp * (2 * x - 3);
+        x = ++oc[P(a2, b2)]; if (x > 1) c += W.opp * (2 * x - 3);
+      }
+      for (i = 0; i < 8; i++) mask[p[i]] |= bit;
+    }
+    for (i = 0; i < N; i++) c += restPen[mask[i]];
+    return c;
+  };
+}
+
+// 출전 인원이 바뀐 세션은 슬롯 교환으로 순위 합 균형을 바로 복구 (복합 이동)
+function balOf(p){ var d1 = p[0] + p[1] - p[2] - p[3], d2 = p[4] + p[5] - p[6] - p[7]; return d1 * d1 + d2 * d2; }
+function repair(p){
+  for (var r = 0; r < 4; r++){
+    var b0 = balOf(p); if (!b0) return;
+    var bi = -1, bj = -1, bv = b0;
+    for (var i = 0; i < 8; i++) for (var j = i + 1; j < 8; j++){
+      if ((i >> 1) === (j >> 1)) continue;
+      var t = p[i]; p[i] = p[j]; p[j] = t;
+      var v = balOf(p); if (v < bv){ bv = v; bi = i; bj = j; }
+      p[j] = p[i]; p[i] = t;
+    }
+    if (bi < 0) return;
+    t = p[bi]; p[bi] = p[bj]; p[bj] = t;
+  }
+}
+
+function solve(N, seed, opt){
+  opt = opt || {};
+  var iters = opt.iters || 20000, R = opt.restarts || 5, T0 = 14, T1 = 0.02;
+  var rnd = rng32(seed), cost = makeCost(N), lnr = Math.log(T1 / T0), nr = N - SLOT;
+  var best = null, bc = Infinity, ycand = new Int8Array(N), save1 = new Int8Array(N), save2 = new Int8Array(N);
+  function sw(a, i, j){ var t = a[i]; a[i] = a[j]; a[j] = t; }
+  function cp(src, dst){ for (var q = 0; q < N; q++) dst[q] = src[q]; }
+  for (var r = 0; r < R; r++){
+    var st = [];
+    for (var s = 0; s < SES; s++){
+      var a = []; for (var i = 0; i < N; i++) a.push(i);
+      for (i = N - 1; i > 0; i--){ var j = rnd() * (i + 1) | 0; sw(a, i, j); }
+      st.push(a);
+    }
+    var cur = cost(st);
+    if (cur < bc){ bc = cur; best = st.map(function(x){ return x.slice(); }); }
+    for (var it = 0; it < iters; it++){
+      var T = T0 * Math.exp(lnr * it / (iters - 1));
+      var m = rnd(), s1 = rnd() * SES | 0, s2 = -1, i1, j1;
+      cp(st[s1], save1);
+      if (m < 0.3){                                   // (a) 세션 안 슬롯 교환
+        i1 = rnd() * 8 | 0; j1 = rnd() * 8 | 0;
+        if ((i1 >> 1) === (j1 >> 1)) continue;
+        sw(st[s1], i1, j1);
+      } else if (m < 0.65){                           // (b) 뛰는 사람 ↔ 쉬는 사람
+        i1 = rnd() * 8 | 0; j1 = 8 + (rnd() * nr | 0);
+        sw(st[s1], i1, j1); repair(st[s1]);
+      } else {                                        // (c) 두 세션의 휴식 인원 맞교환
+        s2 = rnd() * (SES - 1) | 0; if (s2 >= s1) s2++;
+        var A = st[s1], B = st[s2];
+        i1 = 8 + (rnd() * nr | 0);                    // x: s1에서 휴식
+        var x = A[i1], i2 = B.indexOf(x);
+        if (i2 >= 8) continue;                        // x는 s2에서 뛰어야 함
+        var nc0 = 0;
+        for (var q = 8; q < N; q++){ if (A.indexOf(B[q]) < 8) ycand[nc0++] = q; }
+        if (!nc0) continue;
+        var j2 = ycand[rnd() * nc0 | 0];              // y: s2에서 휴식, s1에서 뛰는 사람
+        j1 = A.indexOf(B[j2]);
+        cp(B, save2);
+        sw(A, i1, j1); sw(B, i2, j2);                 // s1: y 휴식, s2: x 휴식 (휴식 총횟수 유지)
+        repair(A); repair(B);
+      }
+      var nc = cost(st), d = nc - cur;
+      if (d <= 0 || rnd() < Math.exp(-d / T)){
+        cur = nc;
+        if (cur < bc - 1e-9){ bc = cur; best = st.map(function(x){ return x.slice(); }); }
+      } else {
+        cp(save1, st[s1]);
+        if (s2 >= 0) cp(save2, st[s2]);
+      }
+    }
+  }
+  return { st: best, cost: bc };
+}
+
+function analyze(st, N){
+  var players = [], pc = [], oc = [], i, j, s;
+  for (i = 0; i < N; i++){ pc.push(new Array(N).fill(0)); oc.push(new Array(N).fill(0)); players.push({ games: 0, rests: 0, maxRun: 0, triples: 0, pattern: '' }); }
+  var diffs = [];
+  for (s = 0; s < SES; s++){
+    var p = st[s];
+    for (var k = 0; k < 8; k += 4){
+      var A = [p[k], p[k+1]], B = [p[k+2], p[k+3]];
+      diffs.push(Math.abs((A[0] + A[1]) - (B[0] + B[1])));
+      pc[A[0]][A[1]]++; pc[A[1]][A[0]]++; pc[B[0]][B[1]]++; pc[B[1]][B[0]]++;
+      A.forEach(function(a){ B.forEach(function(b){ oc[a][b]++; oc[b][a]++; }); });
+    }
+  }
+  for (i = 0; i < N; i++){
+    var run = 0, pl = players[i];
+    for (s = 0; s < SES; s++){
+      var on = st[s].indexOf(i) < 8;
+      pl.pattern += on ? '●' : '○';
+      if (on){ pl.games++; run++; if (run > pl.maxRun) pl.maxRun = run; if (run === 3) pl.triples++; }
+      else { pl.rests++; run = 0; }
+    }
+  }
+  var rests = players.map(function(p){ return p.rests; });
+  var mean = rests.reduce(function(a, b){ return a + b; }, 0) / N;
+  var sd = Math.sqrt(rests.reduce(function(a, r){ return a + (r - mean) * (r - mean); }, 0) / N);
+  var pDup = 0, oDup = 0, pairs2 = 0, maxP = 0, maxO = 0;
+  for (i = 0; i < N; i++) for (j = i + 1; j < N; j++){
+    if (pc[i][j] > 1) pDup += pc[i][j] - 1;
+    if (oc[i][j] > 1) oDup += oc[i][j] - 1;
+    if (pc[i][j] + oc[i][j] > 1) pairs2++;
+    maxP = Math.max(maxP, pc[i][j]); maxO = Math.max(maxO, oc[i][j]);
+  }
+  var maxRests = Math.max.apply(null, rests), minRests = Math.min.apply(null, rests);
+  var idealMin = Math.floor(SES * (N - SLOT) / N), idealMax = Math.ceil(SES * (N - SLOT) / N);
+  return {
+    players: players, pc: pc, oc: oc, diffs: diffs,
+    restMean: mean, restSd: sd, restMin: minRests, restMax: maxRests, restIdeal: minRests >= idealMin && maxRests <= idealMax,
+    triplePlayers: players.filter(function(p){ return p.maxRun >= 3; }).length,
+    tripleRuns: players.reduce(function(a, p){ return a + p.triples; }, 0),
+    diffSum: diffs.reduce(function(a, b){ return a + b; }, 0), diffMax: Math.max.apply(null, diffs),
+    partnerDup: pDup, oppDup: oDup, pairsMet2: pairs2, maxPartner: maxP, maxOpp: maxO
+  };
+}
+
+// ---------- 색: CIELAB에서 최소 색차(ΔE76) 최대화 ----------
+function s2l(c){ return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+function l2s(v){ return v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; }
+function labToLin(L, a, b){
+  var fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  function fi(t){ return t > 0.206893 ? t * t * t : (t - 16 / 116) / 7.787; }
+  var X = 0.95047 * fi(fx), Y = fi(fy), Z = 1.08883 * fi(fz);
+  return [ 3.2404542*X - 1.5371385*Y - 0.4985314*Z,
+          -0.9692660*X + 1.8760108*Y + 0.0415560*Z,
+           0.0556434*X - 0.2040259*Y + 1.0572252*Z ];
+}
+function inGamut(lin){ return lin[0] >= -1e-4 && lin[0] <= 1.0001 && lin[1] >= -1e-4 && lin[1] <= 1.0001 && lin[2] >= -1e-4 && lin[2] <= 1.0001; }
+function linToHex(lin){ return '#' + lin.map(function(v){ var x = Math.round(Math.min(1, Math.max(0, l2s(Math.min(1, Math.max(0, v))))) * 255); return (x < 16 ? '0' : '') + x.toString(16); }).join(''); }
+function hexToLin(h){ return [1, 3, 5].map(function(i){ return s2l(parseInt(h.substr(i, 2), 16) / 255); }); }
+function hexToLab(h){
+  var l = hexToLin(h), X = (0.4124564*l[0] + 0.3575761*l[1] + 0.1804375*l[2]) / 0.95047,
+      Y = 0.2126729*l[0] + 0.7151522*l[1] + 0.0721750*l[2], Z = (0.0193339*l[0] + 0.1191920*l[1] + 0.9503041*l[2]) / 1.08883;
+  function f(t){ return t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116; }
+  return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+}
+function lumHex(h){ var l = hexToLin(h); return 0.2126*l[0] + 0.7152*l[1] + 0.0722*l[2]; }
+function contrast(h1, h2){ var a = lumHex(h1), b = lumHex(h2); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
+function dE(p, q){ var x = p[0]-q[0], y = p[1]-q[1], z = p[2]-q[2]; return Math.sqrt(x*x + y*y + z*z); }
+
+function pickPalette(n, Lmin, Lmax, Cmax, anchors){
+  var c = [], L, a, b;
+  for (L = Lmin; L <= Lmax; L += 2) for (a = -Cmax; a <= Cmax; a += 4) for (b = -Cmax; b <= Cmax; b += 4){
+    if (a*a + b*b > Cmax*Cmax) continue;
+    if (inGamut(labToLin(L, a, b))) c.push([L, a, b]);
+  }
+  var md = c.map(function(p){ return Math.min.apply(null, anchors.map(function(q){ return dE(p, q); })); });
+  var ch = [];
+  for (var k = 0; k < n; k++){
+    var bi = 0; for (var i = 1; i < c.length; i++) if (md[i] > md[bi]) bi = i;
+    ch.push(c[bi]); for (i = 0; i < c.length; i++){ var d = dE(c[i], c[bi]); if (d < md[i]) md[i] = d; }
+  }
+  // 국소 개선: 한 색씩 빼고, 나머지와의 최소 색차가 가장 큰 후보로 교체
+  for (var pass = 0; pass < 12; pass++){
+    var moved = false;
+    for (k = 0; k < n; k++){
+      var others = ch.filter(function(_, t){ return t !== k; }).concat(anchors);
+      function minTo(p){ var m = Infinity; for (var t = 0; t < others.length; t++){ var d = dE(p, others[t]); if (d < m) m = d; } return m; }
+      var curv = minTo(ch[k]), best = ch[k], bv = curv;
+      for (i = 0; i < c.length; i++){ var v = minTo(c[i]); if (v > bv + 1e-9){ bv = v; best = c[i]; } }
+      if (best !== ch[k]){ ch[k] = best; moved = true; }
+    }
+    if (!moved) break;
+  }
+  return ch;
+}
+// 같은 색상각을 유지하며 명도만 움직여 명암비 목표를 맞춘 글자색
+function textFor(lab, bgHex, target, dir){
+  var h = Math.atan2(lab[2], lab[1]), C0 = Math.sqrt(lab[1]*lab[1] + lab[2]*lab[2]);
+  for (var L = lab[0]; L >= 0 && L <= 100; L += dir * 0.5){
+    var C = Math.max(C0 * 1.15, 30), lin;
+    do { lin = labToLin(L, C * Math.cos(h), C * Math.sin(h)); C -= 1; } while (!inGamut(lin) && C > 0);
+    var hx = linToHex(lin);
+    if (contrast(hx, bgHex) >= target) return hx;
+  }
+  return dir < 0 ? '#000000' : '#ffffff';
+}
+function hueOf(lab){ var h = Math.atan2(lab[2], lab[1]) * 180 / Math.PI; return h < 0 ? h + 360 : h; }
+function gcd(a, b){ return b ? gcd(b, a % b) : a; }
+function colorStep(n){ var t = Math.round(n * 0.382), best = 1, bd = 99; for (var s = 2; s < n - 1; s++) if (gcd(s, n) === 1 && Math.abs(s - t) < bd){ bd = Math.abs(s - t); best = s; } return best; }
+var _palCache = {};
+function buildColors(n){
+  if (_palCache[n]) return _palCache[n];
+  var light = pickPalette(n, 76, 92, 64, [[100, 0, 0]]).sort(function(x, y){ return hueOf(x) - hueOf(y); });
+  var dark  = pickPalette(n, 16, 32, 64, [hexToLab('#1a1d22')]).sort(function(x, y){ return hueOf(x) - hueOf(y); });
+  // 다크 팔레트를 밝은 팔레트와 색상각이 가장 맞도록 회전 정렬
+  var bestOff = 0, bestCost = Infinity;
+  for (var off = 0; off < n; off++){
+    var cst = 0;
+    for (var i = 0; i < n; i++){ var dh = Math.abs(hueOf(light[i]) - hueOf(dark[(i + off) % n])); cst += Math.min(dh, 360 - dh); }
+    if (cst < bestCost){ bestCost = cst; bestOff = off; }
+  }
+  var hueSlots = [];
+  for (i = 0; i < n; i++){
+    var lb = linToHex(labToLin(light[i][0], light[i][1], light[i][2]));
+    var dl = dark[(i + bestOff) % n], db = linToHex(labToLin(dl[0], dl[1], dl[2]));
+    hueSlots.push({ bg: lb, fg: textFor(light[i], lb, 5.6, -1), dbg: db, dfg: textFor(dl, db, 7.1, +1) });
+  }
+  // 순위 i → 색 (i*step) mod n, step은 n과 서로소
+  var step = colorStep(n), byPlayer = [];
+  for (i = 0; i < n; i++) byPlayer.push(hueSlots[(i * step) % n]);
+  function minDE(hexes){ var labs = hexes.map(hexToLab), m = Infinity; for (var a = 0; a < labs.length; a++) for (var b = a + 1; b < labs.length; b++) m = Math.min(m, dE(labs[a], labs[b])); return m; }
+  var res = {
+    players: byPlayer, step: step,
+    minDELight: minDE(hueSlots.map(function(x){ return x.bg; })),
+    minDEDark: minDE(hueSlots.map(function(x){ return x.dbg; })),
+    minCRLight: Math.min.apply(null, hueSlots.map(function(x){ return contrast(x.bg, x.fg); })),
+    minCRDark: Math.min.apply(null, hueSlots.map(function(x){ return contrast(x.dbg, x.dfg); }))
+  };
+  _palCache[n] = res;
+  return res;
+}
+
+function shortNames(names){
+  var sh = names.map(function(nm){
+    nm = nm.trim();
+    var ch = Array.from(nm);
+    if (/^[가-힣]+$/.test(nm)){ if (ch.length === 3) return ch.slice(1).join(''); if (ch.length >= 4) return ch.slice(-2).join(''); }
+    return nm;
+  });
+  return sh.map(function(s, i){
+    var dup = sh.some(function(t, j){ return j !== i && t === s; });
+    return dup ? names[i].trim() : s;
+  });
+}
+/*ENGINE-END*/
+
+(function(){
+  var DEFAULT_NAMES = ['김민준','이서연','박도윤','최하은','정지호','강수아','조예준','윤지우','장시우','임하린','한주원','오서윤','서건우','신채원'];
+  function load(k, d){ try { var v = localStorage.getItem('tb.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } }
+  function save(k, v){ try { localStorage.setItem('tb.' + k, JSON.stringify(v)); } catch (e) {} }
+
+  var state = {
+    n: [10, 12, 14].indexOf(load('n', 14)) >= 0 ? load('n', 14) : 14,
+    names: (function(){ var a = load('names', null); if (!Array.isArray(a) || a.length !== 14) a = DEFAULT_NAMES.slice(); return a.map(function(x, i){ return typeof x === 'string' ? x : DEFAULT_NAMES[i]; }); })(),
+    seed: load('seed', 1) | 0 || 1,
+    mode: load('mode', 'summary') === 'detail' ? 'detail' : 'summary',
+    theme: ['auto', 'light', 'dark'].indexOf(load('theme', 'auto')) >= 0 ? load('theme', 'auto') : 'auto'
+  };
+  var result = null, info = null, colors = null;
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  // ---- 테마 ----
+  var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function applyTheme(){
+    var t = state.theme === 'auto' ? (mq && mq.matches ? 'dark' : 'light') : state.theme;
+    document.documentElement.setAttribute('data-theme', t);
+    $('btn-theme').textContent = state.theme === 'auto' ? '◐ 자동' : state.theme === 'light' ? '☀ 밝게' : '☾ 어둡게';
+  }
+  if (mq){ if (mq.addEventListener) mq.addEventListener('change', applyTheme); else if (mq.addListener) mq.addListener(applyTheme); }
+  $('btn-theme').onclick = function(){ state.theme = { auto: 'light', light: 'dark', dark: 'auto' }[state.theme]; save('theme', state.theme); applyTheme(); };
+
+  // ---- 모드 ----
+  function applyMode(){
+    document.body.classList.toggle('mode-summary', state.mode === 'summary');
+    $('btn-detail').setAttribute('aria-pressed', state.mode === 'detail');
+    $('btn-summary').setAttribute('aria-pressed', state.mode === 'summary');
+    $('detail').hidden = state.mode !== 'detail';
+    $('summary').hidden = state.mode !== 'summary';
+  }
+  $('btn-detail').onclick = function(){ state.mode = 'detail'; save('mode', 'detail'); applyMode(); };
+  $('btn-summary').onclick = function(){ state.mode = 'summary'; save('mode', 'summary'); applyMode(); };
+
+  // ---- 설정 ----
+  function renderInputs(){
+    $('sel-n').value = String(state.n);
+    var h = '';
+    for (var i = 0; i < state.n; i++) h += '<label for="nm' + i + '">' + (i + 1) + '</label><input id="nm' + i + '" data-i="' + i + '" value="' + esc(state.names[i]) + '" maxlength="12" autocomplete="off">';
+    $('names').innerHTML = h;
+  }
+  var tmr = null;
+  $('names').addEventListener('input', function(e){
+    var i = +e.target.getAttribute('data-i'); if (isNaN(i)) return;
+    state.names[i] = e.target.value; save('names', state.names);
+    clearTimeout(tmr); tmr = setTimeout(renderAll, 250);   // 이름만 바뀌면 재계산 불필요
+  });
+  $('sel-n').onchange = function(){ state.n = +this.value; save('n', state.n); renderInputs(); recompute(); };
+  $('btn-reset').onclick = function(){ state.names = DEFAULT_NAMES.slice(); save('names', state.names); renderInputs(); renderAll(); };
+  $('btn-reroll').onclick = function(){ state.seed = (Math.random() * 2147483646 | 0) + 1; save('seed', state.seed); recompute(); };
+
+  function names(){ return state.names.slice(0, state.n).map(function(x, i){ return (x || '').trim() || (i + 1) + '번'; }); }
+
+  function recompute(){
+    document.getElementById('main').classList.add('busy');
+    setTimeout(function(){
+      result = solve(state.n, state.seed);
+      info = analyze(result.st, state.n);
+      document.getElementById('main').classList.remove('busy');
+      renderAll();
+    }, 20);
+  }
+
+  function setColorCss(){
+    colors = buildColors(state.n);
+    var css = '';
+    colors.players.forEach(function(c, i){
+      css += '.pc' + i + '{--pbg:' + c.bg + ';--pfg:' + c.fg + '}\n';
+      css += ':root[data-theme="dark"] .pc' + i + '{--pbg:' + c.dbg + ';--pfg:' + c.dfg + '}\n';
+    });
+    $('player-colors').textContent = css;
+  }
+
+  var TEN_NOTE = '10명은 6세션 48자리를 10명이 나눠 1인당 휴식이 평균 1.2회뿐이라, 3연속 경기를 완전히 피하는 것은 수학적으로 불가능합니다. 휴식 1회인 사람은 남은 5경기가 최소 3+2로 나뉘기 때문입니다.';
+  function restLabel(){ return info.restMin === info.restMax ? info.restMin + '회' : info.restMin + '~' + info.restMax + '회'; }
+  function groups(){
+    var by = {}; info.players.forEach(function(p, i){ (by[p.games] = by[p.games] || []).push(i); });
+    return Object.keys(by).map(Number).sort(function(a, b){ return b - a; }).map(function(g){ return { games: g, ids: by[g] }; });
+  }
+
+  function renderAll(){
+    if (!result) return;
+    setColorCss();
+    var nm = names(), sh = shortNames(nm);
+    renderSummary(nm, sh); renderDetail(nm, sh);
+  }
+
+  function renderSummary(nm, sh){
+    var st = result.st, h = '';
+    if (state.n === 10) h += '';
+    h += '<div class="g-wrap"><div class="g-head"><b>테니스 복식 대진표</b><span>' + state.n + '명 · 코트 2면 · 15:00–18:00</span></div>';
+    h += '<table class="g-table"><colgroup><col class="g-col-t">';
+    for (var c = 0; c < 2; c++) h += '<col class="g-col-n"><col class="g-col-n"><col class="g-col-v"><col class="g-col-n"><col class="g-col-n">';
+    h += '</colgroup><thead><tr><th class="g-th g-t">시작</th><th class="g-th" colspan="5">1번 코트</th><th class="g-th g-c2" colspan="5">2번 코트</th></tr></thead><tbody>';
+    function cell(id, extra){ var long = Array.from(sh[id]).length > 2; return '<td class="g-n ' + (extra || '') + '"><span class="pc' + id + (long ? ' g-long' : '') + '" title="' + esc(nm[id]) + '">' + esc(sh[id]) + '</span></td>'; }
+    for (var s = 0; s < SES; s++){
+      var p = st[s];
+      h += '<tr class="g-tr"><td class="g-t">' + TIMES[s] + '</td>';
+      h += cell(p[0]) + cell(p[1]) + '<td class="g-v">vs</td>' + cell(p[2]) + cell(p[3]);
+      h += cell(p[4], 'g-c2') + cell(p[5]) + '<td class="g-v">vs</td>' + cell(p[6]) + cell(p[7]) + '</tr>';
+      var rs = p.slice(8).sort(function(a, b){ return a - b; });
+      h += '<tr class="g-rr"><td class="g-t"></td><td class="g-rb" colspan="10">휴식 ' + rs.map(function(id){ return '<span class="g-chip pc' + id + '">' + esc(sh[id]) + '</span>'; }).join('') + '</td></tr>';
+    }
+    h += '</tbody></table>';
+    h += '<div class="g-foot"><p class="g-stat">휴식 <b>' + restLabel() + '씩</b> · 3연속 <b>' + info.triplePlayers + '명</b></p>';
+    var gs = groups();
+    if (gs.length === 1) {
+      h += '<div class="g-grp"><span class="g-lbl">전원 ' + gs[0].games + '경기</span></div>';
+    } else gs.forEach(function(g){
+      h += '<div class="g-grp"><span class="g-lbl">' + g.games + '경기 <small>(' + g.ids.length + '명)</small></span><span class="g-list">' + g.ids.map(function(id){ return '<span class="g-chip pc' + id + '">' + esc(sh[id]) + '</span>'; }).join('') + '</span></div>';
+    });
+    if (gs.length > 1){
+      var low = gs[gs.length - 1].games;
+      h += '<p class="g-note">' + low + '경기 하시는 분들은 경기 사이 간격이 길게 뜰 수 있어요. 몸이 식지 않도록 일찍 오셔서 충분히 몸을 풀어 주세요!</p>';
+    }
+    if (state.n === 10) h += '<p class="g-warn">※ 10명은 1인당 휴식이 평균 1.2회뿐이라 3연속 경기를 완전히 피할 수 없습니다.</p>';
+    h += '</div></div>';
+    $('summary').innerHTML = h;
+  }
+
+  function renderDetail(nm, sh){
+    var st = result.st, N = state.n, h = '';
+    if (N === 10) h += '<p class="notice">' + TEN_NOTE + '</p>';
+    h += '<div class="quality">';
+    h += q('휴식 편차', restLabel(), '표준편차 ' + info.restSd.toFixed(2) + (info.restIdeal ? ' · 최소 편차' : ''));
+    h += q('3연속 인원', info.triplePlayers + '명', '3연속 구간 ' + info.tripleRuns + '건');
+    h += q('팀 실력차', info.diffSum === 0 ? '0' : '합 ' + info.diffSum, info.diffMax === 0 ? '12경기 모두 순위 합 동일' : '최대 ' + info.diffMax);
+    h += q('중복 만남', '같은 편 ' + info.partnerDup + ' · 상대 ' + info.oppDup, '2회 이상 만난 쌍 ' + info.pairsMet2 + ' · 최다 ' + Math.max(info.maxPartner, info.maxOpp) + '회');
+    h += '</div>';
+    function q(k, v, s){ return '<div class="q"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div>'; }
+    function chip(id){ return '<div class="p pc' + id + '"><span>' + esc(nm[id]) + '</span><small>' + (id + 1) + '</small></div>'; }
+    h += '<div class="cards">';
+    for (var s = 0; s < SES; s++){
+      var p = st[s];
+      h += '<div class="card"><div class="card-h"><b>' + TIMES[s] + ' – ' + ENDS[s] + '</b><span>' + (s + 1) + '세션</span></div>';
+      for (var k = 0; k < 2; k++){
+        var b = 4 * k, sa = p[b] + p[b + 1] + 2, sb = p[b + 2] + p[b + 3] + 2;
+        h += '<div class="court"><div class="court-h"><span>' + (k + 1) + '번 코트</span><span>순위 합 ' + sa + ' : ' + sb + '</span></div>';
+        h += '<div class="vs"><div class="team">' + chip(p[b]) + chip(p[b + 1]) + '</div><div class="vs-mid">vs</div><div class="team">' + chip(p[b + 2]) + chip(p[b + 3]) + '</div></div></div>';
+      }
+      h += '<div class="rest">휴식 ' + p.slice(8).sort(function(a, b){ return a - b; }).map(function(id){ return '<span class="chip pc' + id + '">' + esc(nm[id]) + '</span>'; }).join('') + '</div></div>';
+    }
+    h += '</div>';
+    h += '<h3>참가자별</h3><div class="tbl-wrap"><table class="plain"><thead><tr><th>순위</th><th>이름</th><th>경기</th><th>휴식</th><th>최대연속</th><th>패턴 (●경기 ○휴식)</th></tr></thead><tbody>';
+    info.players.forEach(function(pl, i){
+      h += '<tr><td>' + (i + 1) + '</td><td class="l"><span class="chip pc' + i + '">' + esc(nm[i]) + '</span></td><td>' + pl.games + '</td><td>' + pl.rests + '</td><td class="' + (pl.maxRun >= 3 ? 'bad' : '') + '">' + pl.maxRun + '</td><td class="pat">' + pl.pattern + '</td></tr>';
+    });
+    h += '</tbody></table></div>';
+    h += '<h3>만남 횟수</h3><div class="tbl-wrap"><table class="plain matrix"><thead><tr><th></th>';
+    for (var j = 0; j < N; j++) h += '<th><span class="chip pc' + j + '">' + esc(sh[j]) + '</span></th>';
+    h += '</tr></thead><tbody>';
+    for (var i = 0; i < N; i++){
+      h += '<tr><th><span class="chip pc' + i + '">' + esc(sh[i]) + '</span></th>';
+      for (j = 0; j < N; j++){
+        if (i === j){ h += '<td class="self"></td>'; continue; }
+        var pp = info.pc[i][j], oo = info.oc[i][j];
+        h += '<td class="' + (pp > 1 || oo > 1 ? 'm2' : '') + '">' + (pp || oo ? pp + '/' + oo : '·') + '</td>';
+      }
+      h += '</tr>';
+    }
+    h += '</tbody></table></div><p class="legend">칸 = 같은 편/상대 편 횟수. 노란 칸은 한쪽이라도 2회 이상. 참가자 색 최소 색차 ΔE ' + colors.minDELight.toFixed(1) + ' (다크 ' + colors.minDEDark.toFixed(1) + '), 글자 명암비 최소 ' + colors.minCRLight.toFixed(1) + ':1 (다크 ' + colors.minCRDark.toFixed(1) + ':1).</p>';
+    $('detail').innerHTML = h;
+  }
+
+  // ---- 복사 ----
+  function bracketText(){
+    var nm = names(), sh = shortNames(nm), st = result.st, L = [];
+    L.push('🎾 테니스 복식 대진표 · ' + state.n + '명 · 코트 2면');
+    for (var s = 0; s < SES; s++){
+      var p = st[s], t = function(a, b){ return sh[a] + '·' + sh[b]; };
+      L.push(TIMES[s] + '  1코트 ' + t(p[0], p[1]) + ' vs ' + t(p[2], p[3]) + '  |  2코트 ' + t(p[4], p[5]) + ' vs ' + t(p[6], p[7]));
+      L.push('       휴식: ' + p.slice(8).sort(function(a, b){ return a - b; }).map(function(id){ return sh[id]; }).join(', '));
+    }
+    L.push('');
+    L.push('휴식 ' + restLabel() + '씩 · 3연속 ' + info.triplePlayers + '명');
+    var gs = groups();
+    gs.forEach(function(g){ L.push(g.games + '경기: ' + g.ids.map(function(id){ return sh[id]; }).join(', ')); });
+    if (gs.length > 1) L.push('※ ' + gs[gs.length - 1].games + '경기 하시는 분들은 경기 간격이 뜰 수 있으니 일찍 오셔서 몸을 충분히 풀어 주세요!');
+    return L.join('\n');
+  }
+  function toast(m){ var t = $('toast'); t.textContent = m; t.classList.add('show'); setTimeout(function(){ t.classList.remove('show'); }, 1600); }
+  function fallbackCopy(txt){
+    var ok = false;
+    try {
+      var ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, txt.length); ok = document.execCommand('copy'); document.body.removeChild(ta);
+    } catch (e) { ok = false; }
+    if (ok) toast('복사했어요');
+    else { $('copy-ta').value = txt; $('copy-dlg').classList.add('open'); $('copy-ta').focus(); $('copy-ta').select(); }
+  }
+  $('btn-copy').onclick = function(){
+    if (!result) return;
+    var txt = bracketText();
+    if (navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(txt).then(function(){ toast('복사했어요'); }, function(){ fallbackCopy(txt); });
+    } else fallbackCopy(txt);
+  };
+  $('copy-close').onclick = function(){ $('copy-dlg').classList.remove('open'); };
+
+  applyTheme(); applyMode(); renderInputs(); recompute();
+})();
+</script>
+</body>
+</html>
