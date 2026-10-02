@@ -147,8 +147,13 @@ table.plain td.l{text-align:left}
       <label for="sel-n">인원</label>
       <select id="sel-n"><option value="10">10명</option><option value="11">11명</option><option value="12">12명</option><option value="13">13명</option><option value="14">14명</option></select>
     </div>
+    <div class="field">
+      <label for="sel-g">1인당</label>
+      <select id="sel-g"><option value="3">3게임</option><option value="4">4게임</option></select>
+      <span class="hint" id="ses-info" style="margin:0"></span>
+    </div>
     <div class="names" id="names"></div>
-    <p class="hint">실력 순서대로 입력하세요. 1번이 가장 잘 치는 사람이고, 순위 번호가 실력 점수로 쓰입니다. 입력하면 자동 저장되고 바로 다시 편성됩니다.</p>
+    <p class="hint">1인당 게임 수를 고르면 모두가 최소 그만큼 치도록 세션 수(30분 단위, 15:00 시작)가 정해지고, 자리가 남으면 일부가 1경기 더 칩니다. 이름은 실력 순서대로 입력하세요. 1번이 가장 잘 치는 사람이고, 순위 번호가 실력 점수로 쓰입니다. 입력하면 자동 저장되고 바로 다시 편성됩니다.</p>
     <div class="row-btns">
       <button class="tb-btn" id="btn-reset" type="button">예시 이름으로</button>
     </div>
@@ -170,9 +175,11 @@ table.plain td.l{text-align:left}
 
 <script>
 /*ENGINE-START*/
-var SES = 6, SLOT = 8;
-var TIMES = ['15:00','15:30','16:00','16:30','17:00','17:30'];
-var ENDS  = ['15:30','16:00','16:30','17:00','17:30','18:00'];
+var SES = 6, SLOT = 8, START_MIN = 15 * 60;
+var TIMES = [], ENDS = [];
+function hhmm(m){ return Math.floor(m / 60) + ':' + ('0' + m % 60).slice(-2); }
+// 1인당 최소 g경기가 되도록 세션 수 결정: 코트 2면 = 세션당 8자리
+function sessionsFor(n, g){ return Math.ceil(n * g / SLOT); }
 // 가중치: 페어 밸런스·휴식 균등 최상 > 3연속 상 > 중복 만남 하 > 연속 휴식 소폭
 var W = { pair: 20, rest: 20, triple: 25, partner: 2, opp: 1, restRun: 0.5 };
 
@@ -180,24 +187,29 @@ function rng32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; var t = Ma
 
 // 상태: 세션마다 길이 N 순열. [0..7] = 코트1 A·B / C·D, 코트2 A·B / C·D, [8..] = 휴식
 // 출전 패턴(6비트 마스크)별 3연속·연속휴식 벌점은 미리 표로 계산
-var RUN_TBL = (function(){
-  var t = new Float64Array(64);
-  for (var m = 0; m < 64; m++){
+var RUN_TBL;
+function setSessions(k){
+  SES = k; TIMES = []; ENDS = [];
+  for (var s = 0; s < SES; s++){ TIMES.push(hhmm(START_MIN + 30 * s)); ENDS.push(hhmm(START_MIN + 30 * (s + 1))); }
+  RUN_TBL = new Float64Array(1 << SES);
+  for (var m = 0; m < (1 << SES); m++){
     var c = 0, run = 0, rr = 0;
-    for (var s = 0; s <= SES; s++){
+    for (s = 0; s <= SES; s++){
       var on = s < SES && (m >> s) & 1;
       if (on){ run++; if (rr >= 2) c += W.restRun * (rr - 1); rr = 0; }
       else { if (run >= 3) c += W.triple * (run - 2); run = 0; if (s < SES) rr++; else if (rr >= 2) c += W.restRun * (rr - 1); }
     }
-    t[m] = c;
+    RUN_TBL[m] = c;
   }
-  return t;
-})();
+}
+// 휴식을 고르게 나눴을 때 3연속이 불가피한 최소 인원 (모든 출전 패턴 조합을 동적계획법으로 전수 계산한 값)
+var MIN_TRIPLES = { '3-10': 6, '3-11': 4, '4-10': 8, '4-11': 4 };
+function minTriples(n, g){ return MIN_TRIPLES[g + '-' + n] || 0; }
 function popc(m){ var c = 0; while (m){ c += m & 1; m >>= 1; } return c; }
 function makeCost(N){
   var mask = new Int32Array(N), pc = new Uint8Array(N * N), oc = new Uint8Array(N * N);
-  var mean = SES * (N - SLOT) / N, restPen = new Float64Array(64);
-  for (var m = 0; m < 64; m++){ var dv = (SES - popc(m)) - mean; restPen[m] = W.rest * dv * dv + RUN_TBL[m]; }
+  var mean = SES * (N - SLOT) / N, restPen = new Float64Array(1 << SES);
+  for (var m = 0; m < (1 << SES); m++){ var dv = (SES - popc(m)) - mean; restPen[m] = W.rest * dv * dv + RUN_TBL[m]; }
   function P(i, j){ return i < j ? i * N + j : j * N + i; }
   return function(st){
     var c = 0, s, k, i, x, key;
@@ -268,6 +280,7 @@ function solve(N, seed, opt){
         i1 = rnd() * 8 | 0; j1 = 8 + (rnd() * nr | 0);
         sw(st[s1], i1, j1); repair(st[s1]);
       } else {                                        // (c) 두 세션의 휴식 인원 맞교환
+        if (SES < 2) continue;
         s2 = rnd() * (SES - 1) | 0; if (s2 >= s1) s2++;
         var A = st[s1], B = st[s2];
         i1 = 8 + (rnd() * nr | 0);                    // x: s1에서 휴식
@@ -458,6 +471,7 @@ function shortNames(names){
   var state = {
     n: [10, 11, 12, 13, 14].indexOf(load('n', 14)) >= 0 ? load('n', 14) : 14,
     names: (function(){ var a = load('names', null); if (!Array.isArray(a) || a.length !== 14) a = DEFAULT_NAMES.slice(); return a.map(function(x, i){ return typeof x === 'string' ? x : DEFAULT_NAMES[i]; }); })(),
+    games: load('games', 4) === 3 ? 3 : 4,
     seed: load('seed', 1) | 0 || 1,
     mode: load('mode', 'summary') === 'detail' ? 'detail' : 'summary',
     theme: ['auto', 'light', 'dark'].indexOf(load('theme', 'auto')) >= 0 ? load('theme', 'auto') : 'auto'
@@ -490,6 +504,9 @@ function shortNames(names){
   // ---- 설정 ----
   function renderInputs(){
     $('sel-n').value = String(state.n);
+    $('sel-g').value = String(state.games);
+    var k = sessionsFor(state.n, state.games);
+    $('ses-info').textContent = k + '세션 · ' + hhmm(START_MIN) + '~' + hhmm(START_MIN + 30 * k);
     var h = '';
     for (var i = 0; i < state.n; i++) h += '<label for="nm' + i + '">' + (i + 1) + '</label><input id="nm' + i + '" data-i="' + i + '" value="' + esc(state.names[i]) + '" maxlength="12" autocomplete="off">';
     $('names').innerHTML = h;
@@ -501,6 +518,7 @@ function shortNames(names){
     clearTimeout(tmr); tmr = setTimeout(renderAll, 250);   // 이름만 바뀌면 재계산 불필요
   });
   $('sel-n').onchange = function(){ state.n = +this.value; save('n', state.n); renderInputs(); recompute(); };
+  $('sel-g').onchange = function(){ state.games = +this.value; save('games', state.games); renderInputs(); recompute(); };
   $('btn-reset').onclick = function(){ state.names = DEFAULT_NAMES.slice(); save('names', state.names); renderInputs(); renderAll(); };
   $('btn-reroll').onclick = function(){ state.seed = (Math.random() * 2147483646 | 0) + 1; save('seed', state.seed); recompute(); };
 
@@ -509,6 +527,7 @@ function shortNames(names){
   function recompute(){
     document.getElementById('main').classList.add('busy');
     setTimeout(function(){
+      setSessions(sessionsFor(state.n, state.games));
       result = solve(state.n, state.seed);
       info = analyze(result.st, state.n);
       document.getElementById('main').classList.remove('busy');
@@ -526,11 +545,9 @@ function shortNames(names){
     $('player-colors').textContent = css;
   }
 
-  // 휴식이 1회뿐인 사람은 남은 5경기가 최소 3+2로 나뉘어 3연속이 불가피 (10명: 8명, 11명: 4명)
-  function oneRestCount(n){ var R = SES * (n - SLOT); return R < 2 * n ? 2 * n - R : 0; }
   function tripleNote(n){
-    var k = oneRestCount(n); if (!k) return '';
-    return n + '명은 6세션 48자리를 ' + n + '명이 나눠 1인당 휴식이 평균 ' + (SES * (n - SLOT) / n).toFixed(2).replace(/0+$/, '').replace(/\.$/, '') + '회뿐이라, 3연속 경기를 완전히 피하는 것은 수학적으로 불가능합니다. 휴식을 고르게 나누면 ' + k + '명은 휴식이 1회뿐이고, 그 사람은 남은 5경기가 최소 3+2로 나뉘기 때문입니다 (3연속 최소 ' + k + '명).';
+    var k = minTriples(n, state.games); if (!k) return '';
+    return n + '명 · ' + state.games + '게임(' + SES + '세션)은 ' + (SES * SLOT) + '자리를 나눠 1인당 휴식이 평균 ' + (SES * (n - SLOT) / n).toFixed(2).replace(/0+$/, '').replace(/\.$/, '') + '회뿐이라, 3연속 경기를 완전히 피하는 것은 수학적으로 불가능합니다. 휴식을 고르게 나누는 모든 경우를 따져 보면 최소 ' + k + '명은 3연속이 생깁니다. 예를 들어 휴식 1회인 사람은 남은 경기를 2연속 이하로 나누려면 쉬는 시간대가 정해져 있는데, 그 시간대 휴식 자리가 모자랍니다.';
   }
   function restLabel(){ return info.restMin === info.restMax ? info.restMin + '회' : info.restMin + '~' + info.restMax + '회'; }
   function groups(){
@@ -547,7 +564,7 @@ function shortNames(names){
 
   function renderSummary(nm, sh){
     var st = result.st, h = '';
-    h += '<div class="g-wrap"><div class="g-head"><b>테니스 복식 대진표</b><span>' + state.n + '명 · 코트 2면 · 15:00–18:00</span></div>';
+    h += '<div class="g-wrap"><div class="g-head"><b>테니스 복식 대진표</b><span>' + state.n + '명 · ' + state.games + '게임 · ' + TIMES[0] + '–' + ENDS[SES - 1] + '</span></div>';
     h += '<table class="g-table"><colgroup><col class="g-col-t">';
     for (var c = 0; c < 2; c++) h += '<col class="g-col-n"><col class="g-col-n"><col class="g-col-v"><col class="g-col-n"><col class="g-col-n">';
     h += '</colgroup><thead><tr><th class="g-th g-t">시작</th><th class="g-th" colspan="5">1번 코트</th><th class="g-th g-c2" colspan="5">2번 코트</th></tr></thead><tbody>';
@@ -572,14 +589,15 @@ function shortNames(names){
       var low = gs[gs.length - 1].games;
       h += '<p class="g-note">' + low + '경기 하시는 분들은 경기 사이 간격이 길게 뜰 수 있어요. 몸이 식지 않도록 일찍 오셔서 충분히 몸을 풀어 주세요!</p>';
     }
-    if (oneRestCount(state.n)) h += '<p class="g-warn">※ ' + state.n + '명은 휴식이 1회뿐인 사람이 ' + oneRestCount(state.n) + '명 생겨 3연속 경기를 완전히 피할 수 없습니다.</p>';
+    var ft = minTriples(state.n, state.games);
+    if (ft) h += '<p class="g-warn">※ ' + state.n + '명 · ' + state.games + '게임은 휴식 자리가 모자라 최소 ' + ft + '명은 3연속을 피할 수 없습니다.</p>';
     h += '</div></div>';
     $('summary').innerHTML = h;
   }
 
   function renderDetail(nm, sh){
     var st = result.st, N = state.n, h = '';
-    if (oneRestCount(N)) h += '<p class="notice">' + tripleNote(N) + '</p>';
+    if (minTriples(N, state.games)) h += '<p class="notice">' + tripleNote(N) + '</p>';
     h += '<div class="quality">';
     h += q('휴식 편차', restLabel(), '표준편차 ' + info.restSd.toFixed(2) + (info.restIdeal ? ' · 최소 편차' : ''));
     h += q('3연속 인원', info.triplePlayers + '명', '3연속 구간 ' + info.tripleRuns + '건');
@@ -624,7 +642,7 @@ function shortNames(names){
   // ---- 복사 ----
   function bracketText(){
     var nm = names(), sh = shortNames(nm), st = result.st, L = [];
-    L.push('🎾 테니스 복식 대진표 · ' + state.n + '명 · 코트 2면');
+    L.push('🎾 테니스 복식 대진표 · ' + state.n + '명 · 1인 ' + state.games + '게임 이상 · 코트 2면 · ' + TIMES[0] + '~' + ENDS[SES - 1]);
     for (var s = 0; s < SES; s++){
       var p = st[s], t = function(a, b){ return sh[a] + '·' + sh[b]; };
       L.push(TIMES[s] + '  1코트 ' + t(p[0], p[1]) + ' vs ' + t(p[2], p[3]) + '  |  2코트 ' + t(p[4], p[5]) + ' vs ' + t(p[6], p[7]));
