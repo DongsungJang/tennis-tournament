@@ -117,6 +117,8 @@ table.plain td.l{text-align:left}
 .g-rr td.g-t{background:var(--rest-bg)}
 .g-rb .g-chip{display:inline-block;background:var(--pbg);color:var(--pfg);border-radius:4px;padding:0 4px;margin:1px 2px 1px 0;font-weight:700}
 .g-foot{margin-top:8px;font-size:13px}
+.g-legend{display:flex;gap:4px;margin:0 2px 6px;font-size:11.5px}
+.g-legend .g-chip{background:var(--pbg);color:var(--pfg);border-radius:5px;padding:1px 7px;font-weight:700}
 .g-stat{color:var(--muted);margin:0 2px 6px}
 .g-stat b{color:var(--ink)}
 .g-grp{display:flex;gap:6px;align-items:flex-start;margin:4px 2px}
@@ -477,33 +479,43 @@ function hueOf(lab){ var h = Math.atan2(lab[2], lab[1]) * 180 / Math.PI; return 
 function gcd(a, b){ return b ? gcd(b, a % b) : a; }
 function colorStep(n){ var t = Math.round(n * 0.382), best = 1, bd = 99; for (var s = 2; s < n - 1; s++) if (gcd(s, n) === 1 && Math.abs(s - t) < bd){ bd = Math.abs(s - t); best = s; } return best; }
 var _palCache = {};
+// 실력대별 색: 순위를 3구간(상위 파랑 · 중위 초록 · 하위 주황)으로 균등 분할하고,
+// 같은 계열 안에서는 명도만 단계적으로 다르게. 글자색은 같은 색상각에서 명암비 5.5:1(다크 7:1) 이상
+var TIERS = [ { name: '상위', hue: 255 }, { name: '중위', hue: 150 }, { name: '하위', hue: 62 } ];
+function tierOf(i, n){ return Math.min(2, Math.floor(i * 3 / n)); }
+function tierRanges(n){
+  var r = [[], [], []];
+  for (var i = 0; i < n; i++) r[tierOf(i, n)].push(i + 1);
+  return r.map(function(a, t){ return { name: TIERS[t].name, from: a[0], to: a[a.length - 1], t: t }; });
+}
+function lchHex(L, C, h){
+  var rad = h * Math.PI / 180, lin;
+  do { lin = labToLin(L, C * Math.cos(rad), C * Math.sin(rad)); C -= 0.5; } while (!inGamut(lin) && C > 0);
+  return linToHex(lin);
+}
 function buildColors(n){
   if (_palCache[n]) return _palCache[n];
-  var light = pickPalette(n, 76, 92, 64, [[100, 0, 0]]).sort(function(x, y){ return hueOf(x) - hueOf(y); });
-  var dark  = pickPalette(n, 16, 32, 64, [hexToLab('#1a1d22')]).sort(function(x, y){ return hueOf(x) - hueOf(y); });
-  // 다크 팔레트를 밝은 팔레트와 색상각이 가장 맞도록 회전 정렬
-  var bestOff = 0, bestCost = Infinity;
-  for (var off = 0; off < n; off++){
-    var cst = 0;
-    for (var i = 0; i < n; i++){ var dh = Math.abs(hueOf(light[i]) - hueOf(dark[(i + off) % n])); cst += Math.min(dh, 360 - dh); }
-    if (cst < bestCost){ bestCost = cst; bestOff = off; }
-  }
-  var hueSlots = [];
+  var byPlayer = [], idx = [0, 0, 0], size = [0, 0, 0], i;
+  for (i = 0; i < n; i++) size[tierOf(i, n)]++;
   for (i = 0; i < n; i++){
-    var lb = linToHex(labToLin(light[i][0], light[i][1], light[i][2]));
-    var dl = dark[(i + bestOff) % n], db = linToHex(labToLin(dl[0], dl[1], dl[2]));
-    hueSlots.push({ bg: lb, fg: textFor(light[i], lb, 5.6, -1), dbg: db, dfg: textFor(dl, db, 7.1, +1) });
+    var t = tierOf(i, n), k = idx[t]++, f = size[t] > 1 ? k / (size[t] - 1) : 0.5, h = TIERS[t].hue;
+    var bgL = 93 - 19 * f, bgC = 14 + 20 * f;              // 밝은 테마: 위 순위일수록 옅게
+    var dL = 35 - 19 * f, dC = 14 + 14 * f;                // 다크 테마: 위 순위일수록 밝게
+    var bg = lchHex(bgL, bgC, h), dbg = lchHex(dL, dC, h);
+    var rad = h * Math.PI / 180;
+    byPlayer.push({
+      tier: t, bg: bg, dbg: dbg,
+      fg: textFor([bgL, 40 * Math.cos(rad), 40 * Math.sin(rad)], bg, 5.6, -1),
+      dfg: textFor([dL, 30 * Math.cos(rad), 30 * Math.sin(rad)], dbg, 7.1, +1)
+    });
   }
-  // 순위 i → 색 (i*step) mod n, step은 n과 서로소
-  var step = colorStep(n), byPlayer = [];
-  for (i = 0; i < n; i++) byPlayer.push(hueSlots[(i * step) % n]);
   function minDE(hexes){ var labs = hexes.map(hexToLab), m = Infinity; for (var a = 0; a < labs.length; a++) for (var b = a + 1; b < labs.length; b++) m = Math.min(m, dE(labs[a], labs[b])); return m; }
   var res = {
-    players: byPlayer, step: step,
-    minDELight: minDE(hueSlots.map(function(x){ return x.bg; })),
-    minDEDark: minDE(hueSlots.map(function(x){ return x.dbg; })),
-    minCRLight: Math.min.apply(null, hueSlots.map(function(x){ return contrast(x.bg, x.fg); })),
-    minCRDark: Math.min.apply(null, hueSlots.map(function(x){ return contrast(x.dbg, x.dfg); }))
+    players: byPlayer, tiers: tierRanges(n),
+    minDELight: minDE(byPlayer.map(function(x){ return x.bg; })),
+    minDEDark: minDE(byPlayer.map(function(x){ return x.dbg; })),
+    minCRLight: Math.min.apply(null, byPlayer.map(function(x){ return contrast(x.bg, x.fg); })),
+    minCRDark: Math.min.apply(null, byPlayer.map(function(x){ return contrast(x.dbg, x.dfg); }))
   };
   _palCache[n] = res;
   return res;
@@ -660,9 +672,15 @@ function shortNames(names){
     renderSummary(nm, sh); renderDetail(nm, sh);
   }
 
+  function tierText(){ return colors.tiers.map(function(t){ return t.name + ' ' + t.from + '~' + t.to + '번'; }).join(' · '); }
+  function tierLegend(){
+    var firstOf = [];
+    colors.players.forEach(function(c, i){ if (firstOf[c.tier] === undefined) firstOf[c.tier] = i; });
+    return '<div class="g-legend">' + colors.tiers.map(function(t){ return '<span class="g-chip pc' + firstOf[t.t] + '">' + t.name + ' ' + t.from + '~' + t.to + '</span>'; }).join('') + '</div>';
+  }
   function renderSummary(nm, sh){
     var st = result.st, h = '';
-    h += '<div class="g-wrap"><div class="g-head"><b>테니스 복식 대진표</b><span>' + state.n + '명 · ' + SES + '세션 · ' + TIMES[0] + '–' + ENDS[SES - 1] + '</span></div>';
+    h += '<div class="g-wrap"><div class="g-head"><b>테니스 복식 대진표</b><span>' + state.n + '명 · ' + SES + '세션 · ' + TIMES[0] + '–' + ENDS[SES - 1] + '</span></div>' + tierLegend();
     h += '<table class="g-table"><colgroup><col class="g-col-t">';
     for (var c = 0; c < 2; c++) h += '<col class="g-col-n"><col class="g-col-n"><col class="g-col-v"><col class="g-col-n"><col class="g-col-n">';
     h += '</colgroup><thead><tr><th class="g-th g-t">시작</th><th class="g-th" colspan="5">1번 코트</th><th class="g-th g-c2" colspan="5">2번 코트</th></tr></thead><tbody>';
@@ -733,7 +751,7 @@ function shortNames(names){
       }
       h += '</tr>';
     }
-    h += '</tbody></table></div><p class="legend">칸 = 같은 편/상대 편 횟수. 노란 칸은 한쪽이라도 2회 이상. 참가자 색 최소 색차 ΔE ' + colors.minDELight.toFixed(1) + ' (다크 ' + colors.minDEDark.toFixed(1) + '), 글자 명암비 최소 ' + colors.minCRLight.toFixed(1) + ':1 (다크 ' + colors.minCRDark.toFixed(1) + ':1).</p>';
+    h += '</tbody></table></div><p class="legend">칸 = 같은 편/상대 편 횟수. 노란 칸은 한쪽이라도 2회 이상. 참가자 색은 실력대 3구간(' + tierText() + '), 같은 구간 안에서는 명도만 다름. 글자 명암비 최소 ' + colors.minCRLight.toFixed(1) + ':1 (다크 ' + colors.minCRDark.toFixed(1) + ':1).</p>';
     $('detail').innerHTML = h;
   }
 
