@@ -145,7 +145,7 @@ table.plain td.l{text-align:left}
     <h2>설정</h2>
     <div class="field">
       <label for="sel-n">인원</label>
-      <select id="sel-n"><option value="10">10명</option><option value="12">12명</option><option value="14">14명</option></select>
+      <select id="sel-n"><option value="10">10명</option><option value="11">11명</option><option value="12">12명</option><option value="13">13명</option><option value="14">14명</option></select>
     </div>
     <div class="names" id="names"></div>
     <p class="hint">실력 순서대로 입력하세요. 1번이 가장 잘 치는 사람이고, 순위 번호가 실력 점수로 쓰입니다. 입력하면 자동 저장되고 바로 다시 편성됩니다.</p>
@@ -456,7 +456,7 @@ function shortNames(names){
   function save(k, v){ try { localStorage.setItem('tb.' + k, JSON.stringify(v)); } catch (e) {} }
 
   var state = {
-    n: [10, 12, 14].indexOf(load('n', 14)) >= 0 ? load('n', 14) : 14,
+    n: [10, 11, 12, 13, 14].indexOf(load('n', 14)) >= 0 ? load('n', 14) : 14,
     names: (function(){ var a = load('names', null); if (!Array.isArray(a) || a.length !== 14) a = DEFAULT_NAMES.slice(); return a.map(function(x, i){ return typeof x === 'string' ? x : DEFAULT_NAMES[i]; }); })(),
     seed: load('seed', 1) | 0 || 1,
     mode: load('mode', 'summary') === 'detail' ? 'detail' : 'summary',
@@ -526,7 +526,12 @@ function shortNames(names){
     $('player-colors').textContent = css;
   }
 
-  var TEN_NOTE = '10명은 6세션 48자리를 10명이 나눠 1인당 휴식이 평균 1.2회뿐이라, 3연속 경기를 완전히 피하는 것은 수학적으로 불가능합니다. 휴식 1회인 사람은 남은 5경기가 최소 3+2로 나뉘기 때문입니다.';
+  // 휴식이 1회뿐인 사람은 남은 5경기가 최소 3+2로 나뉘어 3연속이 불가피 (10명: 8명, 11명: 4명)
+  function oneRestCount(n){ var R = SES * (n - SLOT); return R < 2 * n ? 2 * n - R : 0; }
+  function tripleNote(n){
+    var k = oneRestCount(n); if (!k) return '';
+    return n + '명은 6세션 48자리를 ' + n + '명이 나눠 1인당 휴식이 평균 ' + (SES * (n - SLOT) / n).toFixed(2).replace(/0+$/, '').replace(/\.$/, '') + '회뿐이라, 3연속 경기를 완전히 피하는 것은 수학적으로 불가능합니다. 휴식을 고르게 나누면 ' + k + '명은 휴식이 1회뿐이고, 그 사람은 남은 5경기가 최소 3+2로 나뉘기 때문입니다 (3연속 최소 ' + k + '명).';
+  }
   function restLabel(){ return info.restMin === info.restMax ? info.restMin + '회' : info.restMin + '~' + info.restMax + '회'; }
   function groups(){
     var by = {}; info.players.forEach(function(p, i){ (by[p.games] = by[p.games] || []).push(i); });
@@ -542,7 +547,6 @@ function shortNames(names){
 
   function renderSummary(nm, sh){
     var st = result.st, h = '';
-    if (state.n === 10) h += '';
     h += '<div class="g-wrap"><div class="g-head"><b>테니스 복식 대진표</b><span>' + state.n + '명 · 코트 2면 · 15:00–18:00</span></div>';
     h += '<table class="g-table"><colgroup><col class="g-col-t">';
     for (var c = 0; c < 2; c++) h += '<col class="g-col-n"><col class="g-col-n"><col class="g-col-v"><col class="g-col-n"><col class="g-col-n">';
@@ -568,14 +572,14 @@ function shortNames(names){
       var low = gs[gs.length - 1].games;
       h += '<p class="g-note">' + low + '경기 하시는 분들은 경기 사이 간격이 길게 뜰 수 있어요. 몸이 식지 않도록 일찍 오셔서 충분히 몸을 풀어 주세요!</p>';
     }
-    if (state.n === 10) h += '<p class="g-warn">※ 10명은 1인당 휴식이 평균 1.2회뿐이라 3연속 경기를 완전히 피할 수 없습니다.</p>';
+    if (oneRestCount(state.n)) h += '<p class="g-warn">※ ' + state.n + '명은 휴식이 1회뿐인 사람이 ' + oneRestCount(state.n) + '명 생겨 3연속 경기를 완전히 피할 수 없습니다.</p>';
     h += '</div></div>';
     $('summary').innerHTML = h;
   }
 
   function renderDetail(nm, sh){
     var st = result.st, N = state.n, h = '';
-    if (N === 10) h += '<p class="notice">' + TEN_NOTE + '</p>';
+    if (oneRestCount(N)) h += '<p class="notice">' + tripleNote(N) + '</p>';
     h += '<div class="quality">';
     h += q('휴식 편차', restLabel(), '표준편차 ' + info.restSd.toFixed(2) + (info.restIdeal ? ' · 최소 편차' : ''));
     h += q('3연속 인원', info.triplePlayers + '명', '3연속 구간 ' + info.tripleRuns + '건');
