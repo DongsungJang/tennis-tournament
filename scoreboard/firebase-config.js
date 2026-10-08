@@ -1,3 +1,10 @@
-// Firebase 설정값을 아래에 붙여 넣으세요 (null이면 이 기기에만 저장돼요)
-// 예: window.FIREBASE_CONFIG = { apiKey:"...", authDomain:"...", databaseURL:"https://xxxx-default-rtdb.asia-southeast1.firebasedatabase.app", projectId:"...", appId:"..." };
-window.FIREBASE_CONFIG = null;
+// 공유 저장(Firebase Realtime Database) 설정값
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDk43U62miHXdyi-XXjXMsJKA3ApRnyXGg",
+  authDomain: "tennis-score-board-93960.firebaseapp.com",
+  databaseURL: "https://tennis-score-board-93960-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "tennis-score-board-93960",
+  storageBucket: "tennis-score-board-93960.firebasestorage.app",
+  messagingSenderId: "973487755679",
+  appId: "1:973487755679:web:353f82d4060e988a9aadaa"
+};
