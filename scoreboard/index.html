@@ -142,10 +142,11 @@ const $ = id => document.getElementById(id);
 const gid = (s,c) => "g"+s+"_"+c;
 const get = id => state[id] || (state[id] = {b:0,w:0,rps:null});
 
+const tie = g => g.b === g.w && g.b >= 5;
 function outcome(g){
+  if (tie(g)) return g.rps === "b" || g.rps === "w" ? g.rps : "draw";
   if (g.b >= 6) return "b";
   if (g.w >= 6) return "w";
-  if (g.b === 5 && g.w === 5) return g.rps === "b" || g.rps === "w" ? g.rps : "draw";
   return null;
 }
 function phase(g){
@@ -169,7 +170,7 @@ function build(){
       h += '<article class="g" id="c-'+id+'">'
         + '<div class="g-h"><span>'+g.court+'번 코트</span><span class="chip" id="ch-'+id+'">시작 전</span></div>'
         + row(id,"b",g.b) + row(id,"w",g.w)
-        + '<div class="rps" id="r-'+id+'" hidden><b>5:5 무승부 · 가위바위보 승자</b>'
+        + '<div class="rps" id="r-'+id+'" hidden><b>무승부 · 가위바위보 승자</b>'
         + '<button type="button" class="b" data-id="'+id+'" data-rps="b">흑팀</button>'
         + '<button type="button" class="w" data-id="'+id+'" data-rps="w">백팀</button></div>'
         + '<button type="button" class="reset" data-reset="'+id+'">이 경기 초기화</button></article>';
@@ -201,15 +202,15 @@ function paint(){
       const full = o === "b" || o === "w" || o === "draw";
       document.querySelectorAll('[data-id="'+id+'"][data-d]').forEach(btn=>{
         const side = btn.dataset.side, d = +btn.dataset.d;
-        btn.disabled = d > 0 ? (full || g[side] >= 6) : g[side] <= 0;
+        btn.disabled = d > 0 ? g[side] >= 6 : g[side] <= 0;
       });
       const chip = $("ch-"+id);
       const map = {none:["시작 전",""],live:["진행 중","p"],b:["흑팀 승","b"],w:["백팀 승","w"],draw:["무승부 · 가위바위보","d"]};
       let [txt,cls] = map[ph];
-      if (o === "draw" ) {txt = "5:5 무승부"; cls = "d"}
+      if (o === "draw" ) {txt = g.b+":"+g.w+" 무승부"; cls = "d"}
       chip.textContent = txt; chip.className = "chip "+cls;
-      if (o === "b" || o === "w") chip.textContent = (g.b===5&&g.w===5) ? (o==="b"?"흑팀 승 (가위바위보)":"백팀 승 (가위바위보)") : txt;
-      const isDraw = g.b === 5 && g.w === 5;
+      if (o === "b" || o === "w") chip.textContent = tie(g) ? (o==="b"?"흑팀 승 (가위바위보)":"백팀 승 (가위바위보)") : txt;
+      const isDraw = tie(g);
       $("r-"+id).hidden = !isDraw;
       document.querySelectorAll('[data-id="'+id+'"][data-rps]').forEach(b=>b.classList.toggle("on", g.rps === b.dataset.rps));
       $("c-"+id).classList.toggle("done", o==="b"||o==="w");
@@ -280,7 +281,7 @@ $("app").addEventListener("click", e=>{
     const nv = Math.max(0, Math.min(6, g[side] + d));
     if (nv === g[side]) return;
     g[side] = nv;
-    if (!(g.b === 5 && g.w === 5)) g.rps = null;
+    if (!tie(g)) g.rps = null;
     touch(t.dataset.id); paint();
   } else if (t.dataset.rps){
     const g = get(t.dataset.id);
