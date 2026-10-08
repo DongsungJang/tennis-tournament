@@ -127,6 +127,9 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
   <p class="foot">6점 먼저 따면 승리 · 5:5는 무승부 후 가위바위보로 승자 결정<br>승수는 가위바위보 승자까지 포함해서 세요 · 점수는 누를 때마다 자동 저장돼요</p>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-app-compat.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.12.2/firebase-database-compat.min.js"></script>
+<script src="firebase-config.js"></script>
 <script>
 const SCHED = [[{"court": 2, "b": ["하태", "동주"], "w": ["로건", "초희"]}, {"court": 3, "b": ["카일", "지디"], "w": ["토리", "호크"]}, {"court": 4, "b": ["겐샤", "말희"], "w": ["건하", "데릭"]}], [{"court": 2, "b": ["태일", "펭킹"], "w": ["꼬북", "토미"]}, {"court": 3, "b": ["로이", "교민"], "w": ["효주", "니옹"]}, {"court": 4, "b": ["정서", "지디"], "w": ["게리", "미니"]}], [{"court": 2, "b": ["겐샤", "하태"], "w": ["건하", "게리"]}, {"court": 3, "b": ["말희", "매치"], "w": ["초희", "데릭"]}, {"court": 4, "b": ["정서", "동주"], "w": ["로건", "호크"]}], [{"court": 2, "b": ["태일", "카일"], "w": ["초희", "효주"]}, {"court": 3, "b": ["펭킹", "교민"], "w": ["토미", "미니"]}, {"court": 4, "b": ["동주", "로이"], "w": ["꼬북", "니옹"]}], [{"court": 2, "b": ["겐샤", "정서"], "w": ["게리", "로건"]}, {"court": 3, "b": ["매치", "지디"], "w": ["호크", "꼬북"]}, {"court": 4, "b": ["하태", "카일"], "w": ["건하", "토리"]}], [{"court": 2, "b": ["태일", "교민"], "w": ["데릭", "미니"]}, {"court": 3, "b": ["말희", "펭킹"], "w": ["초희", "니옹"]}, {"court": 4, "b": ["동주", "로이"], "w": ["효주", "토미"]}], [{"court": 2, "b": ["겐샤", "매치"], "w": ["게리", "호크"]}, {"court": 3, "b": ["하태", "정서"], "w": ["건하", "로건"]}, {"court": 4, "b": ["지디", "펭킹"], "w": ["토리", "미니"]}], [{"court": 2, "b": ["태일", "매치"], "w": ["토리", "효주"]}, {"court": 3, "b": ["로이", "카일"], "w": ["데릭", "꼬북"]}, {"court": 4, "b": ["교민", "말희"], "w": ["토미", "니옹"]}]];
 const TIMES = ["10:30","11:00","11:30","12:00","12:45","13:15","13:45","14:15"];
@@ -244,7 +247,7 @@ function touch(id){
 async function flush(){
   clearTimeout(timer);
   saveLocal();
-  if (!db) { lastSaved = new Date(); setStatus("이 기기에만 저장됨 · "+hhmm(lastSaved)+" (다른 사람과 공유되지 않아요)","warn"); dirty.clear(); return; }
+  if (!db) { lastSaved = new Date(); setStatus("이 기기에만 저장됨 · "+hhmm(lastSaved)+" (공유 저장이 연결되지 않았어요)","warn"); dirty.clear(); return; }
   if (saving) { timer = setTimeout(flush, 300); return; }
   saving = true;
   try{
@@ -252,9 +255,9 @@ async function flush(){
       const id = [...dirty][0]; dirty.delete(id);
       const g = get(id);
       try{
-        await db.doc("results/"+id).set({b:g.b,w:g.w,rps:g.rps,t:Date.now()});
+        await db.set(id,{b:g.b,w:g.w,rps:g.rps||null,t:Date.now()});
       }catch(e){
-        if (e && e.code === "invalid_argument") { readOnly = true; showReadOnly(); dirty.clear(); break; }
+        if (e && e.code === "PERMISSION_DENIED") { readOnly = true; showReadOnly(); dirty.clear(); break; }
         dirty.add(id);
         setStatus("저장 실패, 잠시 후 다시 시도해요","bad");
         saving = false; timer = setTimeout(flush, 2500); return;
@@ -300,19 +303,25 @@ $("save").addEventListener("click", ()=>{ dirty.size || SCHED.forEach((r,s)=>r.f
 /* ---------- 시작 ---------- */
 loadLocal(); build(); paint();
 setStatus("이 기기에 저장됨");
-(async ()=>{
-  try { db = window.claude ? await window.claude.use("db") : null; } catch(e){ db = null; }
-  if (!db){ setStatus("이 기기에만 저장돼요","warn"); return; }
+(function(){
+  const cfg = window.FIREBASE_CONFIG;
+  if (!cfg || !cfg.databaseURL || !window.firebase){ setStatus("이 기기에만 저장돼요 (공유 저장이 연결되지 않았어요)","warn"); return; }
+  let ref;
+  try { firebase.initializeApp(cfg); ref = firebase.database().ref("results"); }
+  catch(e){ setStatus("공유 저장 연결에 실패했어요 · 이 기기에 저장 중","bad"); return; }
+  db = { set:(id,v)=>ref.child(id).set(v) };
   remoteOk = true;
-  db.collection("results").onSnapshot(snap=>{
-    snap.docs.forEach(d=>{
-      const id = d.id; if (dirty.has(id)) return;
-      const v = d.data(); if (!v) return;
+  setStatus("공유 저장 연결 중…","warn");
+  ref.on("value", snap=>{
+    const o = snap.val() || {};
+    Object.keys(o).forEach(id=>{
+      if (dirty.has(id)) return;
+      const v = o[id]; if (!v || typeof v.b !== "number") return;
       state[id] = {b:v.b|0, w:v.w|0, rps:v.rps||null};
     });
     saveLocal(); paint();
-    if (!dirty.size && !saving && !readOnly) setStatus(lastSaved ? "저장됨 · "+hhmm(lastSaved) : "실시간 연결됨","ok");
-  }, err=>{ remoteOk = false; setStatus("실시간 연결이 끊겼어요 · 이 기기에 저장 중","warn"); });
+    if (!dirty.size && !saving && !readOnly) setStatus(lastSaved ? "저장됨 · "+hhmm(lastSaved) : "공유 저장 연결됨 · 실시간 반영","ok");
+  }, err=>{ remoteOk = false; setStatus("공유 저장 연결이 끊겼어요 · 이 기기에 저장 중","warn"); });
 })();
 </script>
 
