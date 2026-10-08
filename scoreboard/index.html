@@ -61,10 +61,10 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .stats b{color:var(--ink)}
 
 /* 저장 줄 */
-.savebar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:6px 0 4px;flex-wrap:wrap}
-.status{font-size:13px;color:var(--muted)}
+.savebar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.status{font-size:13px;color:var(--muted);min-width:0}
 .status.ok{color:var(--ok)}.status.warn{color:var(--warn)}.status.bad{color:var(--bad)}
-.savebtn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:8px 16px;font-weight:700;font-size:14px}
+.savebtn{flex:none;border:1px solid var(--line);background:var(--btn);border-radius:12px;padding:8px 16px;font-weight:700;font-size:14px}
 .savebtn:active{transform:scale(.97)}
 .notice{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:13px;color:var(--muted);margin-block:6px}
 
@@ -135,13 +135,13 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
       </div>
       <div class="bar" aria-hidden="true"><i class="bb" id="barb" style="width:0"></i><i class="ww" id="barw" style="width:0"></i></div>
       <div class="stats"><span>완료 <b id="sdone">0</b> / 24게임</span><span>진행 중 <b id="sprog">0</b></span><span>가위바위보 대기 <b id="srps">0</b></span></div>
+      <div class="savebar">
+        <span class="status" id="status">불러오는 중…</span>
+        <button class="savebtn" id="save" type="button">지금 저장</button>
+      </div>
     </div>
   </div>
 
-  <div class="savebar">
-    <span class="status" id="status">불러오는 중…</span>
-    <button class="savebtn" id="save" type="button">지금 저장</button>
-  </div>
   <div class="notice" id="note" hidden></div>
   <div id="app"></div>
   <p class="foot">6점 먼저 따면 승리 · 5:5는 무승부 후 가위바위보로 승자 결정<br>승수는 가위바위보 승자까지 포함해서 세요 · 점수는 누를 때마다 자동 저장돼요</p>
@@ -252,18 +252,25 @@ function paint(){
 
 /* ---------- 저장 ---------- */
 function saveLocal(){
-  try{ localStorage.setItem(LS, JSON.stringify(state)); }catch(e){}
+  try{ localStorage.setItem(LS, JSON.stringify(state)); localStorage.setItem(LS+"-dirty", JSON.stringify([...dirty])); }catch(e){}
 }
 function loadLocal(){
+  try{ JSON.parse(localStorage.getItem(LS+"-dirty") || "[]").forEach(k=>dirty.add(k)); }catch(e){}
   try{
     const o = JSON.parse(localStorage.getItem(LS) || "{}");
     Object.keys(o).forEach(k=>{ const v=o[k]; if (v && typeof v.b==="number") state[k]={b:v.b,w:v.w,rps:v.rps||null}; });
   }catch(e){}
 }
-function touch(id){
+// 경기가 끝났을 때(한쪽 6점, 또는 무승부+가위바위보 선택)만 자동 저장. 그 전 점수는 기기에 두고 "지금 저장"으로 올려요.
+function finished(g){ return g.b >= 6 || g.w >= 6 || (tie(g) && !!g.rps); }
+function touch(id, auto){
   dirty.add(id); saveLocal();
-  setStatus(remoteOk ? "저장 중…" : "이 기기에 저장됨", remoteOk ? "warn" : "");
-  clearTimeout(timer); timer = setTimeout(flush, 500);
+  if (auto){
+    setStatus(remoteOk ? "저장 중…" : "이 기기에 저장됨", remoteOk ? "warn" : "");
+    clearTimeout(timer); timer = setTimeout(flush, 500);
+  } else {
+    setStatus("저장 대기 "+dirty.size+"경기 · 한쪽이 6점이 되면 자동 저장돼요","warn");
+  }
 }
 async function flush(){
   clearTimeout(timer);
@@ -302,16 +309,16 @@ $("app").addEventListener("click", e=>{
     if (nv === g[side]) return;
     g[side] = nv;
     if (!tie(g)) g.rps = null;
-    touch(t.dataset.id); paint();
+    touch(t.dataset.id, finished(g)); paint();
   } else if (t.dataset.rps){
     const g = get(t.dataset.id);
     g.rps = g.rps === t.dataset.rps ? null : t.dataset.rps;
-    touch(t.dataset.id); paint();
+    touch(t.dataset.id, true); paint();
   } else if (t.dataset.reset){
     const g = get(t.dataset.reset);
     if (!g.b && !g.w) return;
     if (t.dataset.arm === "1"){
-      g.b = 0; g.w = 0; g.rps = null; touch(t.dataset.reset); paint();
+      g.b = 0; g.w = 0; g.rps = null; touch(t.dataset.reset, true); paint();
       t.textContent = "이 경기 초기화"; t.dataset.arm = "";
     } else {
       t.dataset.arm = "1"; t.textContent = "한 번 더 누르면 0:0으로 돌아가요";
@@ -342,6 +349,7 @@ function connect(){
     });
     saveLocal(); paint();
     if (!dirty.size && !saving && !readOnly) setStatus(lastSaved ? "저장됨 · "+hhmm(lastSaved) : "공유 저장 연결됨 · 실시간 반영","ok");
+    else if (dirty.size && !saving && !readOnly && !timer) setStatus("저장 대기 "+dirty.size+"경기 · 한쪽이 6점이 되면 자동 저장돼요","warn");
   }, err=>{ remoteOk = false; setStatus("공유 저장 연결이 끊겼어요 · 이 기기에 저장 중","warn"); });
 }
 
