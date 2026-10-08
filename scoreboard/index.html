@@ -101,10 +101,30 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .foot{margin-top:26px;font-size:12px;color:var(--muted);text-align:center;line-height:1.7}
 @media (max-width:420px){.big{font-size:54px}.pill{font-size:15px}}
 @media (prefers-reduced-motion:reduce){.bar i{transition:none}}
+
+.gate{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:16px}
+.gate[hidden]{display:none}
+.gate-card{width:100%;max-width:340px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:24px 20px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.gate-card h1{margin:0;font-size:20px}
+.gate-card p{margin:0;font-size:13px;color:var(--muted)}
+.gate-card input{font:inherit;font-family:var(--f-num);font-size:34px;letter-spacing:10px;text-align:center;padding:10px;border-radius:12px;border:2px solid var(--line);background:var(--bg);color:var(--ink);width:100%}
+.gate-card input:focus{outline:3px solid var(--accent);outline-offset:1px}
+.gate-card button{border:0;border-radius:12px;background:var(--blk-bg);color:var(--blk-fg);font-weight:700;font-size:16px;padding:12px}
+.gate-err{min-height:18px;font-size:13px;color:var(--bad)}
+.locked .wrap{display:none}
 </style>
 
 </head>
 <body>
+<div class="gate" id="gate" hidden>
+  <form class="gate-card" id="gform" autocomplete="off">
+    <h1>입장 비밀번호</h1>
+    <p>비밀번호 4자리를 입력하세요</p>
+    <input id="pw" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" aria-label="비밀번호" autocomplete="off">
+    <div class="gate-err" id="gerr" role="alert"></div>
+    <button type="submit">입장</button>
+  </form>
+</div>
 <div class="wrap">
   <div class="board">
     <div class="board-in" aria-live="polite">
@@ -304,7 +324,7 @@ $("save").addEventListener("click", ()=>{ dirty.size || SCHED.forEach((r,s)=>r.f
 /* ---------- 시작 ---------- */
 loadLocal(); build(); paint();
 setStatus("이 기기에 저장됨");
-(function(){
+function connect(){
   const cfg = window.FIREBASE_CONFIG;
   if (!cfg || !cfg.databaseURL || !window.firebase){ setStatus("이 기기에만 저장돼요 (공유 저장이 연결되지 않았어요)","warn"); return; }
   let ref;
@@ -323,6 +343,30 @@ setStatus("이 기기에 저장됨");
     saveLocal(); paint();
     if (!dirty.size && !saving && !readOnly) setStatus(lastSaved ? "저장됨 · "+hhmm(lastSaved) : "공유 저장 연결됨 · 실시간 반영","ok");
   }, err=>{ remoteOk = false; setStatus("공유 저장 연결이 끊겼어요 · 이 기기에 저장 중","warn"); });
+}
+
+
+/* ---------- 입장 비밀번호 ---------- */
+const PW_HASH = "c074ef7bd7d85520672afd4253f247fbecb608381d180192e88b41b2dc6b6224", SALT = "tennis-scoreboard:", PW_KEY = "tennis-scoreboard-pw";
+async function sha(t){
+  const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+t));
+  return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+function unlock(){ $("gate").hidden = true; document.body.classList.remove("locked"); connect(); }
+(async function(){
+  document.body.classList.add("locked");
+  let ok = false;
+  try { ok = localStorage.getItem(PW_KEY) === PW_HASH; } catch(e){}
+  if (ok){ unlock(); return; }
+  $("gate").hidden = false;
+  $("pw").focus();
+  $("gform").addEventListener("submit", async e=>{
+    e.preventDefault();
+    let good = false;
+    try { good = (await sha($("pw").value.trim())) === PW_HASH; } catch(err){ $("gerr").textContent = "이 브라우저에서는 열 수 없어요"; return; }
+    if (good){ try{ localStorage.setItem(PW_KEY, PW_HASH); }catch(err){} unlock(); }
+    else { $("gerr").textContent = "비밀번호가 맞지 않아요"; $("pw").value = ""; $("pw").focus(); }
+  });
 })();
 </script>
 
