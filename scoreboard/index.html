@@ -112,6 +112,11 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .gate-card button{border:0;border-radius:12px;background:var(--blk-bg);color:var(--blk-fg);font-weight:700;font-size:16px;padding:12px}
 .gate-err{min-height:18px;font-size:13px;color:var(--bad)}
 .locked .wrap{display:none}
+.final .step button,.final .reset,.final .rps button{pointer-events:none}
+.final .step button{opacity:.25}
+.final .reset,.final #save{display:none}
+.final .rps button:not(.on){opacity:.35}
+.final-tag{font-weight:900;font-size:13px;color:var(--ok)}
 </style>
 
 </head>
@@ -153,6 +158,7 @@ button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 <script>
 const SCHED = [[{"court": 2, "b": ["하태", "동주"], "w": ["로건", "초희"]}, {"court": 3, "b": ["카일", "지디"], "w": ["토리", "호크"]}, {"court": 4, "b": ["겐샤", "말희"], "w": ["건하", "데릭"]}], [{"court": 2, "b": ["태일", "펭킹"], "w": ["꼬북", "토미"]}, {"court": 3, "b": ["로이", "교민"], "w": ["효주", "니옹"]}, {"court": 4, "b": ["정서", "지디"], "w": ["게리", "미니"]}], [{"court": 2, "b": ["겐샤", "하태"], "w": ["건하", "게리"]}, {"court": 3, "b": ["말희", "매치"], "w": ["초희", "데릭"]}, {"court": 4, "b": ["정서", "동주"], "w": ["로건", "호크"]}], [{"court": 2, "b": ["태일", "카일"], "w": ["초희", "효주"]}, {"court": 3, "b": ["펭킹", "교민"], "w": ["토미", "미니"]}, {"court": 4, "b": ["동주", "로이"], "w": ["꼬북", "니옹"]}], [{"court": 2, "b": ["겐샤", "정서"], "w": ["게리", "로건"]}, {"court": 3, "b": ["매치", "지디"], "w": ["호크", "꼬북"]}, {"court": 4, "b": ["하태", "카일"], "w": ["건하", "토리"]}], [{"court": 2, "b": ["태일", "교민"], "w": ["데릭", "미니"]}, {"court": 3, "b": ["말희", "펭킹"], "w": ["초희", "니옹"]}, {"court": 4, "b": ["동주", "로이"], "w": ["효주", "토미"]}], [{"court": 2, "b": ["겐샤", "매치"], "w": ["게리", "호크"]}, {"court": 3, "b": ["하태", "정서"], "w": ["건하", "로건"]}, {"court": 4, "b": ["지디", "펭킹"], "w": ["토리", "미니"]}], [{"court": 2, "b": ["태일", "매치"], "w": ["토리", "효주"]}, {"court": 3, "b": ["로이", "카일"], "w": ["데릭", "꼬북"]}, {"court": 4, "b": ["교민", "말희"], "w": ["토미", "니옹"]}]];
 const TIMES = ["10:30","11:00","11:30","12:00","12:45","13:15","13:45","14:15"];
+const LOCKED = true;   // 경기 종료: 점수 수정 불가
 const LS = "tennis-scoreboard-v1";
 const state = {};           // id -> {b,w,rps}
 const dirty = new Set();
@@ -177,7 +183,7 @@ function phase(g){
 }
 
 function hhmm(d){return d.toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit",hour12:false})}
-function setStatus(t,cls){const e=$("status");e.textContent=t;e.className="status "+(cls||"")}
+function setStatus(t,cls){const e=$("status");if(LOCKED){e.textContent="경기 종료 · 최종 결과 (수정 불가)";e.className="status final-tag";return}e.textContent=t;e.className="status "+(cls||"")}
 
 /* ---------- 화면 ---------- */
 function build(){
@@ -273,6 +279,7 @@ function touch(id, auto){
   }
 }
 async function flush(){
+  if (LOCKED) return;
   clearTimeout(timer);
   saveLocal();
   if (!db) { lastSaved = new Date(); setStatus("이 기기에만 저장됨 · "+hhmm(lastSaved)+" (공유 저장이 연결되지 않았어요)","warn"); dirty.clear(); return; }
@@ -302,6 +309,7 @@ function showReadOnly(){
 
 /* ---------- 이벤트 ---------- */
 $("app").addEventListener("click", e=>{
+  if (LOCKED) return;
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.d){
     const g = get(t.dataset.id), side = t.dataset.side, d = +t.dataset.d;
@@ -343,7 +351,7 @@ function connect(){
   ref.on("value", snap=>{
     const o = snap.val() || {};
     Object.keys(o).forEach(id=>{
-      if (dirty.has(id)) return;
+      if (!LOCKED && dirty.has(id)) return;
       const v = o[id]; if (!v || typeof v.b !== "number") return;
       state[id] = {b:v.b|0, w:v.w|0, rps:v.rps||null};
     });
@@ -360,7 +368,7 @@ async function sha(t){
   const b = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(SALT+t));
   return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
 }
-function unlock(){ $("gate").hidden = true; document.body.classList.remove("locked"); connect(); }
+function unlock(){ $("gate").hidden = true; document.body.classList.remove("locked"); if (LOCKED) document.body.classList.add("final"); connect(); }
 (async function(){
   document.body.classList.add("locked");
   let ok = false;
