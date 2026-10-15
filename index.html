@@ -38,7 +38,7 @@ button{cursor:pointer}
 .toast.show{opacity:1}
 
 /* ---------- 레이아웃 ---------- */
-.layout{display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px;padding:16px;max-width:1280px;margin:0 auto}
+.layout{display:grid;grid-template-columns:320px minmax(0,1fr);gap:16px;padding:16px;max-width:1280px;margin:0 auto}
 @media (max-width:880px){.layout{grid-template-columns:minmax(0,1fr)}
   body.mode-summary #settings{display:none}}
 body.mode-summary .layout{padding-top:10px}
@@ -46,7 +46,9 @@ body.mode-summary .layout{padding-top:10px}
 #settings h2{font-size:15px;margin:0 0 10px}
 .field{display:flex;align-items:center;gap:8px;margin-bottom:10px}
 .field select{padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:var(--card)}
-.names{display:grid;grid-template-columns:28px 1fr auto;gap:5px 6px;align-items:center}
+.names{display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:5px 6px;align-items:center}
+.xsel{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:5px 0;width:52px;font-size:12px;font-weight:600;color:var(--muted)}
+.xsel[data-x="1"],.xsel[data-x="2"]{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-line)}
 .gsel{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
 .gsel button{border:0;background:var(--card);padding:5px 8px;font-size:12.5px;font-weight:600;color:var(--muted)}
 .gsel button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
@@ -155,7 +157,7 @@ table.plain td.l{text-align:left}
     </div>
     <div id="games-info" class="ginfo"></div>
     <div class="names" id="names"></div>
-    <p class="hint">이름 옆 버튼으로 사람마다 3/4/5게임을 지정합니다. 게임 수 합계 ÷ 8(코트 2면 × 4명)이 세션 수가 되고, 15:00부터 30분 단위로 진행됩니다. 이름은 실력 순서대로 입력하세요. 1번이 가장 잘 치는 사람이고, 순위 번호가 실력 점수로 쓰입니다. 입력하면 자동 저장되고 바로 다시 편성됩니다.</p>
+    <p class="hint">이름 옆 버튼으로 사람마다 2/3/4/5게임을 지정합니다. 맨 오른쪽 버튼을 누를 때마다 <b>전체 → 첫판✕ → 막판✕</b>로 바뀝니다. 늦게 오는 사람은 첫판✕, 일찍 가는 사람은 막판✕로 두면 그 판에는 배정되지 않고, 남은 판에서 지정한 게임 수를 그대로 칩니다. 게임 수 합계 ÷ 8(코트 2면 × 4명)이 세션 수가 되고, 15:00부터 30분 단위로 진행됩니다. 이름은 실력 순서대로 입력하세요. 1번이 가장 잘 치는 사람이고, 순위 번호가 실력 점수로 쓰입니다. 입력하면 자동 저장되고 바로 다시 편성됩니다.</p>
     <div class="row-btns">
       <button class="tb-btn" id="btn-reset" type="button">예시 이름으로</button>
     </div>
@@ -180,11 +182,20 @@ table.plain td.l{text-align:left}
 var SES = 6, SLOT = 8, START_MIN = 15 * 60;
 var TIMES = [], ENDS = [];
 function hhmm(m){ return Math.floor(m / 60) + ':' + ('0' + m % 60).slice(-2); }
-var GMIN = 3, GMAX = 5;
-// 참가자별 게임 수(3~5) 합계 = 세션 수 × 8자리 (코트 2면). 합이 8의 배수이고, 누구도 세션 수보다 많이 칠 수 없어야 편성 가능
-function sessionsForGames(games){
+var GMIN = 2, GMAX = 5;
+// 참가자별 제외: 0 = 없음, 1 = 첫판 제외(늦게 옴), 2 = 마지막판 제외(일찍 감). 해당 세션은 무조건 휴식
+function offAt(e, s){ return (e === 1 && s === 0) || (e === 2 && s === SES - 1); }
+// 같은 세션에서 빠지는 사람이 휴식 자리(인원 - 8)보다 많으면 편성 불가
+function exclIssue(n, ex){
+  var c1 = 0, c2 = 0; (ex || []).slice(0, n).forEach(function(e){ if (e === 1) c1++; else if (e === 2) c2++; });
+  return c1 > n - SLOT ? { which: '첫판', cnt: c1 } : c2 > n - SLOT ? { which: '마지막판', cnt: c2 } : null;
+}
+// 참가자별 게임 수(2~5) 합계 = 세션 수 × 8자리 (코트 2면). 합이 8의 배수이고, 누구도 칠 수 있는 세션 수(제외 판 빼고)보다 많이 칠 수 없어야 편성 가능
+function sessionsForGames(games, ex){
   var t = games.reduce(function(a, b){ return a + b; }, 0), k = t / SLOT;
-  return t % SLOT || Math.max.apply(null, games) > k ? 0 : k;
+  if (t % SLOT || exclIssue(games.length, ex)) return 0;
+  for (var i = 0; i < games.length; i++) if (games[i] > k - (ex && ex[i] ? 1 : 0)) return 0;
+  return k;
 }
 // 인원별 기본 지정: 6세션(48자리) 이하에서 가능한 가장 긴 편성, 4게임은 위 순위부터
 function defaultGames(n){
@@ -194,19 +205,22 @@ function defaultGames(n){
 }
 // 편성할 수 없는 지정이면 가장 가까운 편성 가능한 합계로 맞춘 제안
 // (줄일 땐 아래 순위부터 가장 많은 게임을 1씩, 늘릴 땐 위 순위부터 가장 적은 게임을 1씩. 세션 수보다 많은 게임은 세션 수로)
-function fitGames(games, keep){
+function fitGames(games, keep, ex){
   var n = games.length, t0 = games.reduce(function(a, b){ return a + b; }, 0), best = null, bd = Infinity;
   for (var target = Math.ceil(GMIN * n / SLOT) * SLOT; target <= GMAX * n; target += SLOT){
-    var cap = Math.min(GMAX, target / SLOT); if (cap * n < target) continue;
+    // 사람마다 상한 = min(5, 세션 수 - 제외 판)
+    var cap = games.map(function(_, i){ return Math.min(GMAX, target / SLOT - (ex && ex[i] ? 1 : 0)); });
+    if (Math.min.apply(null, cap) < GMIN || cap.reduce(function(a, b){ return a + b; }, 0) < target) continue;
     var d = Math.abs(target - t0); if (d > bd || (d === bd && target < t0)) continue;   // 같은 거리면 늘리는 쪽
-    var g = games.map(function(x){ return Math.min(x, cap); }), t = g.reduce(function(a, b){ return a + b; }, 0);
+    var g = games.map(function(x, i){ return Math.min(x, cap[i]); }), t = g.reduce(function(a, b){ return a + b; }, 0);
     // keep(방금 바꾼 사람)은 되도록 건드리지 않음
     for (var pass = 0; pass < 2 && t !== target; pass++){
-      for (var v = cap; v > GMIN && t > target; v--)
+      for (var v = GMAX; v > GMIN && t > target; v--)
         for (var i = n - 1; i >= 0 && t > target; i--) if (g[i] === v && (pass || i !== keep)){ g[i]--; t--; }
-      for (v = GMIN; v < cap && t < target; v++)
-        for (i = 0; i < n && t < target; i++) if (g[i] === v && (pass || i !== keep)){ g[i]++; t++; }
+      for (v = GMIN; v < GMAX && t < target; v++)
+        for (i = 0; i < n && t < target; i++) if (g[i] === v && v < cap[i] && (pass || i !== keep)){ g[i]++; t++; }
     }
+    if (t !== target) continue;
     best = g; bd = d;
   }
   return best;
@@ -220,34 +234,39 @@ function rng32(a){ return function(){ a |= 0; a = a + 0x6D2B79F5 | 0; var t = Ma
 
 // 상태: 세션마다 길이 N 순열. [0..7] = 코트1 A·B / C·D, 코트2 A·B / C·D, [8..] = 휴식
 // 출전 패턴(세션 수 비트 마스크)별 3연속·연속휴식 벌점은 미리 표로 계산
+// 제외 유형별로 따로: 제외된 판은 없는 셈 치고(그 앞뒤 휴식을 연속 휴식으로 세지 않음), 첫 경기도 참석 후 1~2세션 안
 var RUN_TBL;
 function setSessions(k){
   SES = k; TIMES = []; ENDS = [];
   for (var s = 0; s < SES; s++){ TIMES.push(hhmm(START_MIN + 30 * s)); ENDS.push(hhmm(START_MIN + 30 * (s + 1))); }
-  RUN_TBL = new Float64Array(1 << SES);
-  for (var m = 0; m < (1 << SES); m++){
-    var c = 0, run = 0, rr = 0;
-    for (s = 0; s <= SES; s++){
-      var on = s < SES && (m >> s) & 1;
-      if (on){ run++; if (rr >= 2) c += W.restRun * (rr - 1); rr = 0; }
-      else { if (run >= 3) c += W.triple * (run - 2); run = 0; if (s < SES) rr++; else if (rr >= 2) c += W.restRun * (rr - 1); }
+  RUN_TBL = [[0, SES], [1, SES], [0, SES - 1]].map(function(r){
+    var lo = r[0], hi = r[1], tb = new Float64Array(1 << SES);
+    for (var m = 0; m < (1 << SES); m++){
+      var c = 0, run = 0, rr = 0;
+      for (var s = lo; s <= hi; s++){
+        var on = s < hi && (m >> s) & 1;
+        if (on){ run++; if (rr >= 2) c += W.restRun * (rr - 1); rr = 0; }
+        else { if (run >= 3) c += W.triple * (run - 2); run = 0; if (s < hi) rr++; else if (rr >= 2) c += W.restRun * (rr - 1); }
+      }
+      if (!((m >> lo) & 3)) c += W.lateStart;
+      tb[m] = c;
     }
-    if (!(m & 3)) c += W.lateStart;
-    RUN_TBL[m] = c;
-  }
+    return tb;
+  });
 }
 // 지정한 게임 수로 3연속을 피할 수 없는 최소 인원: 세션별 휴식 자리 수를 상태로 한 전수 탐색
 // (첫 경기 1~2세션 규칙 포함. 같은 게임 수끼리는 패턴 순서를 고정해 대칭을 없애고, 실패한 상태는 기억해 다시 보지 않음.
 //  3연속 허용 인원 t를 0부터 늘려 가며 처음 가능한 t가 답)
-function minTriples(games){
+function minTriples(games, ex){
   var S = SES, n = games.length, need = n - SLOT, pw = [], pats = {}, s, m;
   for (s = 0; s < S; s++) pw.push(Math.pow(need + 1, s));
-  var g = games.slice().sort(function(a, b){ return b - a; });
+  // 같은 (게임 수, 제외 유형)끼리 묶어 대칭 제거
+  var g = games.map(function(x, i){ return x * 4 + (ex && ex[i] || 0); }).sort(function(a, b){ return b - a; });
   g.forEach(function(x){
     if (pats[x]) return;
-    var a = [];
+    var a = [], e = x & 3, lo = e === 1 ? 1 : 0, off = e === 1 ? 1 : e === 2 ? 1 << (S - 1) : 0;
     for (m = 0; m < (1 << S); m++){
-      if (popc(m) !== x || !(m & 3)) continue;
+      if (popc(m) !== x >> 2 || !((m >> lo) & 3) || (m & off)) continue;
       var run = 0, mx = 0; for (s = 0; s < S; s++){ run = (m >> s) & 1 ? run + 1 : 0; if (run > mx) mx = run; }
       a.push({ m: m, tr: mx >= 3 ? 1 : 0 });
     }
@@ -278,8 +297,9 @@ function minTriples(games){
   return -1;
 }
 function popc(m){ var c = 0; while (m){ c += m & 1; m >>= 1; } return c; }
-function makeCost(N){
-  var mask = new Int32Array(N), pc = new Uint8Array(N * N), oc = new Uint8Array(N * N), restPen = RUN_TBL;
+function makeCost(N, ex){
+  var mask = new Int32Array(N), pc = new Uint8Array(N * N), oc = new Uint8Array(N * N);
+  var restPen = []; for (var q = 0; q < N; q++) restPen.push(RUN_TBL[ex[q] || 0]);
   function P(i, j){ return i < j ? i * N + j : j * N + i; }
   return function(st){
     var c = 0, s, k, i, x, key;
@@ -300,7 +320,7 @@ function makeCost(N){
       }
       for (i = 0; i < 8; i++) mask[p[i]] |= bit;
     }
-    for (i = 0; i < N; i++) c += restPen[mask[i]];
+    for (i = 0; i < N; i++) c += restPen[i][mask[i]];
     return c;
   };
 }
@@ -324,20 +344,26 @@ function repair(p){
 
 function solve(N, seed, opt){
   opt = opt || {};
-  var games = opt.games || defaultGames(N);
+  var games = opt.games || defaultGames(N), ex = opt.excl || [];
   var iters = opt.iters || 20000, R = opt.restarts || 5, T0 = 14, T1 = 0.02;
-  var rnd = rng32(seed), cost = makeCost(N), lnr = Math.log(T1 / T0), nr = N - SLOT;
+  var rnd = rng32(seed), cost = makeCost(N, ex), lnr = Math.log(T1 / T0), nr = N - SLOT;
   var best = null, bc = Infinity, ycand = new Int8Array(N), save1 = new Int8Array(N), save2 = new Int8Array(N);
   function sw(a, i, j){ var t = a[i]; a[i] = a[j]; a[j] = t; }
   function cp(src, dst){ for (var q = 0; q < N; q++) dst[q] = src[q]; }
   for (var r = 0; r < R; r++){
-    // 초기 배치: 세션마다 남은 휴식이 가장 많은 사람부터 쉬게 해 개인별 게임 수를 정확히 맞춤
-    var st = [], rem = games.map(function(g){ return SES - g; });
+    // 초기 배치: 세션마다 여유(남은 출전 가능 세션 - 남은 게임)가 가장 적은 사람부터 뛰게 해 개인별 게임 수를 정확히 맞춤.
+    // 제외된 판에는 그 사람을 무조건 휴식 자리로
+    var st = [], rem = games.slice();
     for (var s = 0; s < SES; s++){
-      var a = []; for (var i = 0; i < N; i++) a.push(i);
+      var a = [], slack = [], avl = []; for (var i = 0; i < N; i++){
+        a.push(i);
+        var av = 0; for (var u = s; u < SES; u++) if (!offAt(ex[i], u)) av++;
+        slack.push(offAt(ex[i], s) || rem[i] <= 0 ? 1e9 : av - rem[i]); avl.push(av);   // 게임을 다 채운 사람도 휴식
+      }
       for (i = N - 1; i > 0; i--){ var j = rnd() * (i + 1) | 0; sw(a, i, j); }
-      a.sort(function(x, y){ return rem[x] - rem[y]; });     // 휴식 많이 남은 사람이 뒤(휴식 자리)로
-      for (i = SLOT; i < N; i++) rem[a[i]]--;
+      // 여유 많은 사람·제외된 사람이 뒤(휴식 자리)로. 여유가 같으면 뒤에 빠질 판이 있는 사람이 먼저 뜀
+      a.sort(function(x, y){ return slack[x] - slack[y] || avl[x] - avl[y]; });
+      for (i = 0; i < SLOT; i++) rem[a[i]]--;
       var pl = a.slice(0, SLOT);
       for (i = SLOT - 1; i > 0; i--){ j = rnd() * (i + 1) | 0; sw(pl, i, j); }
       st.push(pl.concat(a.slice(SLOT)));
@@ -360,9 +386,9 @@ function solve(N, seed, opt){
         var A = st[s1], B = st[s2];
         i1 = 8 + (rnd() * nr | 0);                    // x: s1에서 휴식
         var x = A[i1], i2 = B.indexOf(x);
-        if (i2 >= 8) continue;                        // x는 s2에서 뛰어야 함
+        if (i2 >= 8 || offAt(ex[x], s1)) continue;     // x는 s2에서 뛰어야 하고, s1에서 뛸 수 있어야 함
         var nc0 = 0;
-        for (var q = 8; q < N; q++){ if (A.indexOf(B[q]) < 8) ycand[nc0++] = q; }
+        for (var q = 8; q < N; q++){ if (A.indexOf(B[q]) < 8 && !offAt(ex[B[q]], s2)) ycand[nc0++] = q; }
         if (!nc0) continue;
         var j2 = ycand[rnd() * nc0 | 0];              // y: s2에서 휴식, s1에서 뛰는 사람
         j1 = A.indexOf(B[j2]);
@@ -383,7 +409,8 @@ function solve(N, seed, opt){
   return { st: best, cost: bc };
 }
 
-function analyze(st, N){
+function analyze(st, N, ex){
+  ex = ex || [];
   var players = [], pc = [], oc = [], i, j, s;
   for (i = 0; i < N; i++){ pc.push(new Array(N).fill(0)); oc.push(new Array(N).fill(0)); players.push({ games: 0, rests: 0, maxRun: 0, triples: 0, pattern: '' }); }
   var diffs = [];
@@ -400,7 +427,7 @@ function analyze(st, N){
     var run = 0, pl = players[i]; pl.first = 0;
     for (s = 0; s < SES; s++){
       var on = st[s].indexOf(i) < 8;
-      pl.pattern += on ? '●' : '○';
+      pl.pattern += on ? '●' : offAt(ex[i], s) ? '–' : '○';
       if (on && !pl.first) pl.first = s + 1;
       if (on){ pl.games++; run++; if (run > pl.maxRun) pl.maxRun = run; if (run === 3) pl.triples++; }
       else { pl.rests++; run = 0; }
@@ -421,7 +448,7 @@ function analyze(st, N){
   return {
     players: players, pc: pc, oc: oc, diffs: diffs,
     restMean: mean, restSd: sd, restMin: minRests, restMax: maxRests, restIdeal: minRests >= idealMin && maxRests <= idealMax,
-    lateStarters: players.filter(function(p){ return p.first > 2; }).length,
+    lateStarters: players.filter(function(p, i){ return p.first > (ex[i] === 1 ? 3 : 2); }).length,
     triplePlayers: players.filter(function(p){ return p.maxRun >= 3; }).length,
     tripleRuns: players.reduce(function(a, p){ return a + p.triples; }, 0),
     diffSum: diffs.reduce(function(a, b){ return a + b; }, 0), diffMax: Math.max.apply(null, diffs),
@@ -560,14 +587,18 @@ function shortNames(names){
     names: (function(){ var a = load('names', null); if (!Array.isArray(a) || a.length !== 14) a = DEFAULT_NAMES.slice(); return a.map(function(x, i){ return typeof x === 'string' ? x : DEFAULT_NAMES[i]; }); })(),
     seed: load('seed', 1) | 0 || 1,
     pgames: null,
+    excl: null,
     mode: load('mode', 'summary') === 'detail' ? 'detail' : 'summary',
     theme: ['auto', 'light', 'dark'].indexOf(load('theme', 'auto')) >= 0 ? load('theme', 'auto') : 'auto'
   };
   var result = null, info = null, colors = null;
   (function(){
     var pg = load('pgames', null);
-    var ok = pg && pg.n === state.n && Array.isArray(pg.g) && pg.g.length === state.n && pg.g.every(function(x){ return x === 3 || x === 4 || x === 5; });
+    var ok = pg && pg.n === state.n && Array.isArray(pg.g) && pg.g.length === state.n && pg.g.every(function(x){ return x >= GMIN && x <= GMAX; });
     state.pgames = ok ? pg.g.slice() : defaultGames(state.n);
+    var xe = load('excl', null);
+    var xok = xe && xe.n === state.n && Array.isArray(xe.e) && xe.e.length === state.n && xe.e.every(function(x){ return x === 0 || x === 1 || x === 2; });
+    state.excl = xok ? xe.e.slice() : new Array(state.n).fill(0);
   })();
   var $ = function(id){ return document.getElementById(id); };
   function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -603,27 +634,36 @@ function shortNames(names){
       h += '<span class="gsel" role="group" aria-label="' + (i + 1) + '번 게임 수">';
       for (var v = GMIN; v <= GMAX; v++) h += '<button type="button" data-gi="' + i + '" data-g="' + v + '" aria-pressed="' + (g === v) + '">' + v + '</button>';
       h += '</span>';
+      var x = state.excl[i];
+      h += '<button type="button" class="xsel" data-xi="' + i + '" data-x="' + x + '" title="누를 때마다 전체 → 첫판 제외(늦게 옴) → 마지막판 제외(일찍 감)" aria-label="' + (i + 1) + '번 ' + XLABEL[x] + '">' + XSHORT[x] + '</button>';
     }
     $('names').innerHTML = h;
     renderGamesInfo();
   }
+  var XSHORT = ['전체', '첫판✕', '막판✕'], XLABEL = ['제외 없음', '첫판 제외', '마지막판 제외'];
+  function saveEx(){ save('excl', { n: state.n, e: state.excl }); }
   function totalGames(){ return state.pgames.reduce(function(a, b){ return a + b; }, 0); }
   function renderGamesInfo(){
-    var t = totalGames(), k = sessionsForGames(state.pgames), el = $('games-info');
-    if (k){
+    var t = totalGames(), k = sessionsForGames(state.pgames, state.excl), el = $('games-info'), xi = exclIssue(state.n, state.excl);
+    if (xi){
+      el.className = 'ginfo bad';
+      el.innerHTML = xi.which + ' 제외가 ' + xi.cnt + '명이에요. ' + state.n + '명이면 한 판에 ' + (state.n - SLOT) + '명까지만 쉴 수 있어서, ' + xi.which + ' 제외는 ' + (state.n - SLOT) + '명 이하로 줄여 주세요.';
+    } else if (k){
       var cnt = [];
       for (var v = GMAX; v >= GMIN; v--){ var c = state.pgames.filter(function(g){ return g === v; }).length; if (c) cnt.push(v + '게임 ' + c + '명'); }
       el.className = 'ginfo';
-      el.innerHTML = cnt.join(' · ') + ' = 합계 <b>' + t + '경기</b><br>' + k + '세션 · ' + hhmm(START_MIN) + '~' + hhmm(START_MIN + 30 * k);
+      var xs = exclText(names());
+      el.innerHTML = cnt.join(' · ') + ' = 합계 <b>' + t + '경기</b><br>' + k + '세션 · ' + hhmm(START_MIN) + '~' + hhmm(START_MIN + 30 * k) + (xs ? '<br>' + esc(xs) : '');
     } else {
-      var f = fitGames(state.pgames, state.lastGi), ft = f.reduce(function(a, b){ return a + b; }, 0), nm = names(), ch = [];
+      var f = fitGames(state.pgames, state.lastGi, state.excl), ft = f.reduce(function(a, b){ return a + b; }, 0), nm = names(), ch = [];
       f.forEach(function(g, i){ if (g !== state.pgames[i]) ch.push(esc(nm[i]) + ' ' + state.pgames[i] + '→' + g); });
-      var why = t % SLOT ? '8(코트 2면 × 4명)의 배수가 아니라' : (t / SLOT) + '세션뿐이라 ' + Math.max.apply(null, state.pgames) + '게임을 칠 수 없어서';
+      var over = -1; state.pgames.forEach(function(g, i){ if (over < 0 && g > t / SLOT - (state.excl[i] ? 1 : 0)) over = i; });
+      var why = t % SLOT ? '8(코트 2면 × 4명)의 배수가 아니라' : esc(nm[over]) + ' 님은 ' + (t / SLOT - (state.excl[over] ? 1 : 0)) + '세션만 칠 수 있는데 ' + state.pgames[over] + '게임이라';
       el.className = 'ginfo bad';
       el.innerHTML = '합계 <b>' + t + '경기</b>는 ' + why + ' 편성할 수 없어요. ' + ch.join(', ') + (/[3]$/.test(ch[ch.length - 1]) ? '으로' : '로') + ' 바꾸면 ' + ft + '경기 = ' + (ft / SLOT) + '세션이 돼요.<br><button class="tb-btn" type="button" data-fit="1">자동으로 맞추기</button>';
     }
   }
-  function applyFit(){ state.pgames = fitGames(state.pgames, state.lastGi); savePg(); renderInputs(); recompute(); }
+  function applyFit(){ var f = fitGames(state.pgames, state.lastGi, state.excl); if (!f) return; state.pgames = f; savePg(); renderInputs(); recompute(); }
   function savePg(){ save('pgames', { n: state.n, g: state.pgames }); }
   $('settings').addEventListener('click', function(e){
     var b = e.target.closest ? e.target.closest('button') : null; if (!b) return;
@@ -631,6 +671,9 @@ function shortNames(names){
       var i = +b.getAttribute('data-gi'), g = +b.getAttribute('data-g');
       if (state.pgames[i] === g) return;
       state.pgames[i] = g; state.lastGi = i; savePg(); renderInputs(); recompute();
+    } else if (b.hasAttribute('data-xi')){
+      var xi = +b.getAttribute('data-xi');
+      state.excl[xi] = (state.excl[xi] + 1) % 3; saveEx(); renderInputs(); recompute();
     } else if (b.hasAttribute('data-fit')) applyFit();
   });
   $('main').addEventListener('click', function(e){ if (e.target.hasAttribute && e.target.hasAttribute('data-fit')) applyFit(); });
@@ -641,7 +684,7 @@ function shortNames(names){
     clearTimeout(tmr); tmr = setTimeout(renderAll, 250);   // 이름만 바뀌면 재계산 불필요
   });
   // 인원을 바꾸면 그 인원의 기본 지정(6세션 이하에서 가장 긴 편성, 4게임은 위 순위부터)으로 다시 시작
-  $('sel-n').onchange = function(){ state.n = +this.value; save('n', state.n); state.pgames = defaultGames(state.n); savePg(); renderInputs(); recompute(); };
+  $('sel-n').onchange = function(){ state.n = +this.value; save('n', state.n); state.pgames = defaultGames(state.n); savePg(); state.excl = new Array(state.n).fill(0); saveEx(); renderInputs(); recompute(); };
   $('btn-reset').onclick = function(){ state.names = DEFAULT_NAMES.slice(); save('names', state.names); renderInputs(); renderAll(); };
   $('btn-reroll').onclick = function(){ state.seed = (Math.random() * 2147483646 | 0) + 1; save('seed', state.seed); recompute(); };
 
@@ -650,12 +693,12 @@ function shortNames(names){
   function recompute(){
     document.getElementById('main').classList.add('busy');
     setTimeout(function(){
-      var k = sessionsForGames(state.pgames);
+      var k = sessionsForGames(state.pgames, state.excl);
       if (!k){ result = null; document.getElementById('main').classList.remove('busy'); renderInvalid(); return; }
       setSessions(k);
-      result = solve(state.n, state.seed, { games: state.pgames.slice() });
-      info = analyze(result.st, state.n);
-      info.minTr = minTriples(state.pgames);
+      result = solve(state.n, state.seed, { games: state.pgames.slice(), excl: state.excl.slice() });
+      info = analyze(result.st, state.n, state.excl);
+      info.minTr = minTriples(state.pgames, state.excl);
       document.getElementById('main').classList.remove('busy');
       renderAll();
     }, 20);
@@ -676,8 +719,17 @@ function shortNames(names){
     return n + '명 · ' + SES + '세션은 세션마다 휴식 자리가 ' + (n - SLOT) + '개뿐이라, 지금 지정한 게임 수로는 3연속 경기를 완전히 피하는 것이 수학적으로 불가능합니다. 가능한 출전 패턴을 모두 따져 보면 최소 ' + k + '명은 3연속이 생깁니다. 예를 들어 ' + SES + '세션 중 1번만 쉬는 사람이 2연속 이하로 치려면 쉬는 시간대가 정해지는데, 그 시간대 휴식 자리가 모자랍니다.';
   }
   function renderInvalid(){
-    var h = '<div class="notice">사람별 게임 수 지정으로는 대진표를 만들 수 없어요(합계가 8의 배수가 아니거나, 세션 수보다 많은 게임). 상세 화면의 설정에서 3/4/5게임 지정을 고치거나 자동으로 맞춰 주세요.<br><button class="tb-btn" type="button" data-fit="1" style="margin-top:6px">자동으로 맞추기</button></div>';
+    var h = '<div class="notice">지금 지정으로는 대진표를 만들 수 없어요(합계가 8의 배수가 아니거나, 칠 수 있는 세션보다 많은 게임, 또는 한 판에 빠지는 사람이 너무 많음). 상세 화면의 설정에서 게임 수나 첫판/막판 제외를 고치거나 자동으로 맞춰 주세요.<br><button class="tb-btn" type="button" data-fit="1" style="margin-top:6px">자동으로 맞추기</button></div>';
     $('summary').innerHTML = h; $('detail').innerHTML = h;
+  }
+  // 첫판/마지막판 제외 명단 (이름 가나다순)
+  function exclText(nm){
+    var sh = shortNames(nm), out = [];
+    [1, 2].forEach(function(e){
+      var ids = []; for (var i = 0; i < state.n; i++) if (state.excl[i] === e) ids.push(i);
+      if (ids.length) out.push(['', '첫판 제외', '마지막판 제외'][e] + ': ' + byName(ids, sh).map(function(id){ return sh[id]; }).join(', '));
+    });
+    return out.join(' · ');
   }
   function restLabel(){ return info.restMin === info.restMax ? info.restMin + '회' : info.restMin + '~' + info.restMax + '회'; }
   function groups(){
@@ -712,6 +764,7 @@ function shortNames(names){
     }
     h += '</tbody></table>';
     h += '<div class="g-foot"><p class="g-stat">휴식 <b>' + restLabel() + '씩</b> · 3연속 <b>' + info.triplePlayers + '명</b></p>';
+    var xs = exclText(nm); if (xs) h += '<p class="g-stat">' + esc(xs) + '</p>';
     var gs = groups();
     if (gs.length === 1) {
       h += '<div class="g-grp"><span class="g-lbl">전원 ' + gs[0].games + '경기</span></div>';
@@ -751,7 +804,7 @@ function shortNames(names){
       h += '<div class="rest">휴식 ' + p.slice(8).sort(function(a, b){ return a - b; }).map(function(id){ return '<span class="chip pc' + id + '">' + esc(nm[id]) + '</span>'; }).join('') + '</div></div>';
     }
     h += '</div>';
-    h += '<h3>참가자별</h3><div class="tbl-wrap"><table class="plain"><thead><tr><th>순위</th><th>이름</th><th>경기</th><th>휴식</th><th>최대연속</th><th>패턴 (●경기 ○휴식)</th></tr></thead><tbody>';
+    h += '<h3>참가자별</h3><div class="tbl-wrap"><table class="plain"><thead><tr><th>순위</th><th>이름</th><th>경기</th><th>휴식</th><th>최대연속</th><th>패턴 (●경기 ○휴식 –제외)</th></tr></thead><tbody>';
     info.players.forEach(function(pl, i){
       h += '<tr><td>' + (i + 1) + '</td><td class="l"><span class="chip pc' + i + '">' + esc(nm[i]) + '</span></td><td>' + pl.games + '</td><td>' + pl.rests + '</td><td class="' + (pl.maxRun >= 3 ? 'bad' : '') + '">' + pl.maxRun + '</td><td class="pat">' + pl.pattern + '</td></tr>';
     });
@@ -783,6 +836,7 @@ function shortNames(names){
     }
     L.push('');
     L.push('휴식 ' + restLabel() + '씩 · 3연속 ' + info.triplePlayers + '명');
+    var xs = exclText(nm); if (xs) L.push(xs);
     var gs = groups();
     gs.forEach(function(g){ L.push(g.games + '경기: ' + byName(g.ids, sh).map(function(id){ return sh[id]; }).join(', ')); });
     if (gs.length > 1) L.push('※ ' + gs[gs.length - 1].games + '경기 하시는 분들은 경기 간격이 뜰 수 있으니 일찍 오셔서 몸을 충분히 풀어 주세요!');
